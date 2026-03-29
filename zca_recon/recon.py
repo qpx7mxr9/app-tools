@@ -14,9 +14,8 @@ Entry points (called from Excel via xlwings RunPython):
 
 import xlwings as xw
 import pandas as pd
-import tkinter as tk
-from tkinter import messagebox, filedialog
 from datetime import datetime
+from . import dialogs as dlg
 
 # ── Sheet/column identifiers ──────────────────────────────────────────────────
 SHEET_NAME  = "Common Area"
@@ -61,49 +60,7 @@ EXPORT_COLS = [
 ]
 
 
-# ── Dialog helpers ────────────────────────────────────────────────────────────
-
-def _root():
-    """Create a hidden tkinter root window for dialog parenting."""
-    r = tk.Tk()
-    r.withdraw()
-    r.lift()
-    try:
-        r.attributes("-topmost", True)
-    except Exception:
-        pass
-    return r
-
-def info(title, msg):
-    r = _root(); messagebox.showinfo(title, msg, parent=r); r.destroy()
-
-def ask_ok_cancel(title, msg):
-    r = _root(); result = messagebox.askokcancel(title, msg, parent=r); r.destroy(); return result
-
-def ask_yes_no(title, msg):
-    r = _root(); result = messagebox.askyesno(title, msg, parent=r); r.destroy(); return result
-
-def ask_yes_no_cancel(title, msg):
-    """Returns True=Yes, False=No, None=Cancel."""
-    r = _root(); result = messagebox.askyesnocancel(title, msg, parent=r); r.destroy(); return result
-
-def pick_csv():
-    """Open a file picker and return the selected CSV path, or empty string."""
-    r = _root()
-    path = filedialog.askopenfilename(
-        parent=r, title="Select Source Export CSV",
-        filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")])
-    r.destroy()
-    return path or ""
-
-def get_save_path(suggested, title):
-    """Open a save-as dialog and return the chosen path, or empty string."""
-    r = _root()
-    path = filedialog.asksaveasfilename(
-        parent=r, title=title, initialfile=suggested,
-        defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
-    r.destroy()
-    return path or ""
+# Dialog helpers are in dialogs.py — imported as dlg
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -123,7 +80,7 @@ def _get_sheet(wb):
     try:
         return wb.sheets[SHEET_NAME]
     except Exception:
-        info("Error", f"Could not find '{SHEET_NAME}' sheet.")
+        dlg.info("Error", f"Could not find '{SHEET_NAME}' sheet.")
         return None
 
 def _read_df(ws):
@@ -193,26 +150,14 @@ def _stamp_dashboard(wb):
 def run_reconciliation():
     """
     Main entry point.
-    1. Shows intro prompt.
-    2. Asks whether to import a source CSV.
-    3. Routes to _run_with_csv or _run_without_csv.
+    Shows clean intro dialog with Import / Skip / Cancel options.
+    Routes to _run_with_csv or _run_without_csv.
     """
     wb = xw.Book.caller()
-    if not ask_ok_cancel(
-        "CA Reconciliation",
-        "COMMON AREA RECONCILIATION\n\n"
-        "What you will need:\n"
-        "  •  Source export CSV\n"
-        "     (Admin Portal > Phone > Common Area Phones > Export)\n\n"
-        "After reconciling you will be asked if you want to:\n"
-        "  •  Export an UPDATE file (discrepancy/in-progress)\n"
-        "  •  Export an ADD file (not yet provisioned)\n\n"
-        "Click OK to continue, or Cancel to exit."
-    ):
+    action = dlg.show_intro()
+    if action is None:
         return
-
-    if ask_yes_no("CA Reconciliation",
-                  "Do you want to import a source export CSV to reconcile against?"):
+    if action == "import":
         _run_with_csv(wb)
     else:
         _run_without_csv(wb)
@@ -247,7 +192,7 @@ def _run_with_csv(wb):
       No fields match                   -> Setup     / Partial
       Extension not in CSV              -> Setup     / Not Found in CSV
     """
-    csv_path = pick_csv()
+    csv_path = dlg.pick_csv()
     if not csv_path:
         return
 
@@ -255,10 +200,10 @@ def _run_with_csv(wb):
         df_csv = pd.read_csv(csv_path, dtype=str).fillna("")
         df_csv.columns = [c.strip() for c in df_csv.columns]
     except Exception as e:
-        info("Error", f"Could not load CSV:\n{e}"); return
+        dlg.info("Error", f"Could not load CSV:\n{e}"); return
 
     if EXT_HDR not in df_csv.columns:
-        info("Error", f"'{EXT_HDR}' not found in CSV.\n\nFound: {', '.join(df_csv.columns)}"); return
+        dlg.info("Error", f"'{EXT_HDR}' not found in CSV.\n\nFound: {', '.join(df_csv.columns)}"); return
 
     # Build lookup keyed by lowercase extension for case-insensitive matching
     df_csv["_key"] = df_csv[EXT_HDR].str.strip().str.lower()
@@ -270,13 +215,13 @@ def _run_with_csv(wb):
 
     df = _read_df(ws)
     if df.empty:
-        info("Error", "No data on tracking sheet."); return
+        dlg.info("Error", "No data on tracking sheet."); return
 
     headers = list(df.columns)
     if EXT_HDR not in headers:
-        info("Error", f"'{EXT_HDR}' not found on sheet."); return
+        dlg.info("Error", f"'{EXT_HDR}' not found on sheet."); return
     if STATUS_HDR not in headers:
-        info("Error", f"'{STATUS_HDR}' not found on sheet."); return
+        dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
     today = datetime.now().strftime("%m-%d-%Y %H:%M")
     cnt = dict(complete=0, disc=0, progress=0, incomplete=0)
@@ -339,16 +284,11 @@ def _run_with_csv(wb):
     _color_status(ws, _read_df(ws))
     _stamp_dashboard(wb)
 
-    info("CA Reconciliation",
-         f"Reconciliation complete.\n\n"
-         f"  Complete:     {cnt['complete']}\n"
-         f"  Discrepancy:  {cnt['disc']}\n"
-         f"  In Progress:  {cnt['progress']}\n"
-         f"  Incomplete:   {cnt['incomplete']}")
-
-    if ask_yes_no("CA Reconciliation", "Export UPDATE file (discrepancy/in-progress)?"):
+    # Single results window with checkboxes — no multiple popups
+    exports = dlg.show_results(cnt)
+    if "update" in exports:
         _export(wb, "update")
-    if ask_yes_no("CA Reconciliation", "Export ADD file (not yet provisioned)?"):
+    if "add" in exports:
         _export(wb, "add")
 
 
@@ -367,16 +307,21 @@ def _run_without_csv(wb):
     headers = list(df.columns)
 
     if STATUS_HDR not in headers:
-        info("Error", f"'{STATUS_HDR}' not found on sheet."); return
+        dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
     statuses = df[STATUS_HDR].dropna().astype(str).str.strip()
     count = (statuses != "").sum()
 
     if count == 0:
-        info("CA Reconciliation", "No statuses found. No rows have been reconciled yet.")
-        ans = ask_yes_no_cancel(
+        dlg.info("CA Reconciliation", "No statuses found. No rows have been reconciled yet.")
+        from tkinter import messagebox
+        import tkinter as tk
+        r = tk.Tk(); r.withdraw()
+        ans = messagebox.askyesnocancel(
             "CA Reconciliation",
-            "Mark all rows as Setup Incomplete and export an Add file?")
+            "Mark all rows as Setup Incomplete and export an Add file?",
+            parent=r)
+        r.destroy()
         if ans is None:
             return
         if ans:
@@ -391,11 +336,12 @@ def _run_without_csv(wb):
             _stamp_dashboard(wb)
             _export(wb, "add")
     else:
-        info("CA Reconciliation",
-             f"{count} row(s) already have statuses. Skipping import.")
-        if ask_yes_no("CA Reconciliation", "Export UPDATE file?"):
+        dlg.info("CA Reconciliation",
+                 f"{count} row(s) already have statuses. Skipping import.")
+        exports = dlg.show_results({"complete": 0, "disc": 0, "progress": 0, "incomplete": 0})
+        if "update" in exports:
             _export(wb, "update")
-        if ask_yes_no("CA Reconciliation", "Export ADD file?"):
+        if "add" in exports:
             _export(wb, "add")
 
 
@@ -419,14 +365,12 @@ def _export(wb, export_type):
     headers = list(df.columns)
 
     if STATUS_HDR not in headers:
-        info("Error", f"'{STATUS_HDR}' not found on sheet."); return
+        dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
-    use_temp = ask_yes_no(
-        "Phone Number Source",
-        "Which phone numbers should the export use?\n\n"
-        "  Yes  = Zoom Temp Numbers\n"
-        "  No   = Actual Numbers"
-    )
+    phone_choice = dlg.ask_phone_source()
+    if phone_choice is None:
+        return
+    use_temp = phone_choice == "temp"
 
     date_str = datetime.now().strftime("%Y%m%d")
     if export_type == "update":
@@ -434,7 +378,7 @@ def _export(wb, export_type):
     else:
         suggested, title = f"CA_Add_{date_str}.csv", "Save Add CSV"
 
-    save_path = get_save_path(suggested, title)
+    save_path = dlg.get_save_path(suggested, title)
     if not save_path:
         return
 
@@ -457,7 +401,7 @@ def _export(wb, export_type):
     filtered = df[mask]
 
     if filtered.empty:
-        info("Nothing to Export",
+        dlg.info("Nothing to Export",
              "No matching rows found for this export type."); return
 
     # Build output rows
@@ -477,4 +421,4 @@ def _export(wb, export_type):
 
     out_df = pd.DataFrame(out_rows, columns=[h for h, _ in cols])
     out_df.to_csv(save_path, index=False)
-    info("Export Complete", f"{len(out_df)} row(s) exported.\n{save_path}")
+    dlg.info("Export Complete", f"{len(out_df)} row(s) exported.\n{save_path}")
