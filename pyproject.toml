@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "app-tools"
+version = "1.0.0"
+description = "Ops automation tools — xlwings/Excel add-ins"
+requires-python = ">=3.9"
+dependencies = [
+    "xlwings>=0.30",
+    "pandas>=2.0",
+]
+
+# Automatically discovers all packages (zca_recon, zp_users_recon, etc.)
+[tool.setuptools.packages.find]
+where = ["."]
