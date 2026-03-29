@@ -444,11 +444,32 @@ def _draw_buttons_note(ws, row):
 
 def build_dashboard():
     """
-    Full dashboard build.
-    Creates or resets 'Dashboard 2' sheet and draws all blocks.
-    Called from Excel: RunPython "import dashboard; dashboard.build_dashboard()"
+    Full dashboard build — called from Excel button via RunPython.
     """
-    wb = xw.Book.caller()
+    _build(xw.Book.caller())
+
+
+def build_for_workbook(wb_path):
+    """
+    Full dashboard build — called from a standalone setup script.
+    Opens the workbook, builds the dashboard, saves and closes.
+    """
+    app = xw.App(visible=True)
+    wb  = app.books.open(wb_path)
+    try:
+        _build(wb)
+        wb.save()
+    finally:
+        wb.close()
+        app.quit()
+
+
+def refresh_ca_block():
+    """Fast refresh — alias for build_dashboard (always full rebuild)."""
+    _build(xw.Book.caller())
+
+
+def _build(wb):
 
     # Create or clear Dashboard 2
     try:
