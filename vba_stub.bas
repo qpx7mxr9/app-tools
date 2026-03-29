@@ -18,24 +18,24 @@ End Function
 
 ' ── CA Tools Dashboard ────────────────────────────────────
 Sub Dashboard_Build()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import dashboard; dashboard.build_dashboard()"
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import dashboard; dashboard.build_dashboard()"
 End Sub
 
 Sub Dashboard_Refresh()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import dashboard; dashboard.refresh_ca_block()"
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import dashboard; dashboard.refresh_ca_block()"
 End Sub
 
 ' ── Common Areas ─────────────────────────────────────────
 Sub ZCA_RunReconciliation()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import zca_recon; zca_recon.run_reconciliation()"
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.run_reconciliation()"
 End Sub
 
 Sub ZCA_ExportUpdate()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import zca_recon; zca_recon.export_update()"
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.export_update()"
 End Sub
 
 Sub ZCA_ExportAdd()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import zca_recon; zca_recon.export_add()"
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.export_add()"
 End Sub
 
 ' ── Add stubs for new tools below as they are built ──────
