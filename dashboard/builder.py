@@ -19,7 +19,7 @@ from datetime import datetime
 _IS_MAC = platform.system() == "Darwin"
 
 # ── Sheet names ───────────────────────────────────────────────
-DASHBOARD_SHEET = "Dashboard 2"
+DASHBOARD_SHEET = "CA Tools"
 CA_SHEET        = "Common Area"
 
 # ── Column indices (0-based) on Common Area sheet ─────────────
@@ -451,15 +451,51 @@ def _draw_last_run(ws, row, last_run):
     return row + 1
 
 
-def _draw_buttons_note(ws, row):
-    """Note about macro buttons — actual buttons added in Excel."""
-    _row_height(ws, row, 18)
-    _merge(ws, row, 2, row, 9)
-    _write(ws, row, 2,
-           "  ▶  Run Reconciliation    ▶  Export Update    ▶  Export Add",
-           size=9, bold=True, fg=C_SECTION_BG, bg=C_CARD_BG,
-           align="left", valign="center")
-    _border_box(ws, row, 2, row, 9, color=C_SECTION_BG, weight=1)
+def _draw_buttons(ws, row):
+    """
+    Add Form Control buttons wired to VBA macros.
+    Falls back to a styled text row if button API is unavailable.
+    """
+    _row_height(ws, row, 28)
+    _fill(ws, row, 1, row, 10, C_WHITE)
+
+    # Button specs: (label, macro_name, col_start, col_end)
+    buttons = [
+        ("Run Reconciliation",  "ZCA_RunReconciliation", 2, 3),
+        ("Export Update",       "ZCA_ExportUpdate",      5, 6),
+        ("Export Add",          "ZCA_ExportAdd",         8, 9),
+    ]
+
+    added = 0
+    for caption, macro, c1, c2 in buttons:
+        anchor = _range(ws, row, c1, row, c2)
+        try:
+            left   = anchor.left   + 2
+            top    = anchor.top    + 3
+            width  = anchor.width  - 4
+            height = anchor.height - 6
+
+            if _IS_MAC:
+                btn = ws.api.buttons.add(left, top, width, height)
+                btn.caption.set(caption)
+                btn.on_action.set(macro)
+            else:
+                btn = ws.api.Buttons().Add(left, top, width, height)
+                btn.Caption  = caption
+                btn.OnAction = macro
+            added += 1
+        except Exception:
+            pass
+
+    if added == 0:
+        # Fallback: styled text row
+        _merge(ws, row, 2, row, 9)
+        _write(ws, row, 2,
+               "  ▶  Run Reconciliation    ▶  Export Update    ▶  Export Add",
+               size=9, bold=True, fg=C_SECTION_BG, bg=C_CARD_BG,
+               align="left", valign="center")
+        _border_box(ws, row, 2, row, 9, color=C_SECTION_BG, weight=1)
+
     return row + 2
 
 
@@ -530,7 +566,7 @@ def _build(wb):
     _draw_spacer(ws, row, 6);  row += 1
 
     # Header
-    row = _draw_header(ws, row, tenant_name="Deployment Dashboard")
+    row = _draw_header(ws, row, tenant_name="Common Area Tools")
     row = _draw_spacer(ws, row, 10)
 
     # Common Areas block
@@ -546,7 +582,7 @@ def _build(wb):
         row = _draw_site_table(ws, row, ca)
         row = _draw_last_run(ws, row, ca["last_run"])
         row = _draw_spacer(ws, row, 8)
-        row = _draw_buttons_note(ws, row)
+        row = _draw_buttons(ws, row)
     else:
         _write(ws, row, 2, "⚠  Common Area sheet not found.", fg=C_SETUP_FG)
         row += 2

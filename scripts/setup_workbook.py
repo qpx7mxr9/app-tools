@@ -45,7 +45,7 @@ VBA_CODE = """\
 ' Repo: https://github.com/qpx7mxr9/app-tools
 ' ============================================================
 
-' ── Dashboard ────────────────────────────────────────────────
+' ── CA Tools Dashboard ────────────────────────────────────────
 Sub Dashboard_Build()
     RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/AppTools/app-tools')); import dashboard; dashboard.build_dashboard()"
 End Sub
