@@ -98,7 +98,9 @@ def main():
         _build(wb)
         print("  ✓ Dashboard 2 built")
     except Exception as e:
+        import traceback
         print(f"  ✗ Dashboard build failed: {e}")
+        traceback.print_exc()
 
     # ── Step 2: Inject VBA module ─────────────────────────────
     print("Injecting VBA module...")
@@ -138,7 +140,10 @@ def main():
     print()
     print("Setup complete. You can close this window.")
     print()
-    input("Press Enter to close Excel and exit...")
+    try:
+        input("Press Enter to close Excel and exit...")
+    except EOFError:
+        pass  # non-interactive run — leave Excel open for user to review
     try:
         wb.close(save_changes=False)
         app.quit()

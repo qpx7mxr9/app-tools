@@ -11,8 +11,12 @@ Entry points:
     refresh_ca_block()  - Refresh only the Common Areas block (fast update)
 """
 
+import sys
+import platform
 import xlwings as xw
 from datetime import datetime
+
+_IS_MAC = platform.system() == "Darwin"
 
 # ── Sheet names ───────────────────────────────────────────────
 DASHBOARD_SHEET = "Dashboard 2"
@@ -50,7 +54,7 @@ C_PROGRESS_EMPTY= (217, 217, 217)   # Progress bar empty
 
 def _cell(ws, row, col):
     """1-based row/col cell reference."""
-    return ws.range(row, col)
+    return ws.range((row, col))
 
 def _range(ws, r1, c1, r2, c2):
     return ws.range((r1, c1), (r2, c2))
@@ -59,18 +63,37 @@ def _write(ws, row, col, value, bold=False, size=11, fg=None, bg=None,
            align="left", valign="center", wrap=False, num_fmt=None, italic=False):
     cell = _cell(ws, row, col)
     cell.value = value
-    cell.api.Font.Bold = bold
-    cell.api.Font.Size = size
-    cell.api.Font.Italic = italic
-    if fg:
-        cell.api.Font.Color = _rgb(fg)
     if bg:
         cell.color = bg
-    cell.api.HorizontalAlignment = _halign(align)
-    cell.api.VerticalAlignment = _valign(valign)
-    cell.api.WrapText = wrap
     if num_fmt:
         cell.number_format = num_fmt
+    _fmt_cell(cell, bold=bold, size=size, italic=italic, fg=fg,
+              align=align, valign=valign, wrap=wrap)
+
+
+def _fmt_cell(cell, bold=False, size=11, italic=False, fg=None,
+              align="left", valign="center", wrap=False):
+    """Apply font + alignment — cross-platform (xlwings Font object + api for alignment)."""
+    try:
+        cell.font.bold   = bold
+        cell.font.size   = size
+        cell.font.italic = italic
+        if fg:
+            cell.font.color = fg   # xlwings Font accepts (R,G,B) tuple
+    except Exception:
+        pass
+    # Alignment and wrap — try COM first, fall back to AppleScript
+    try:
+        if _IS_MAC:
+            cell.api.horizontal_alignment.set(_halign(align))
+            cell.api.vertical_alignment.set(_valign(valign))
+            cell.api.wrap_text.set(wrap)
+        else:
+            cell.api.HorizontalAlignment = _halign(align)
+            cell.api.VerticalAlignment   = _valign(valign)
+            cell.api.WrapText            = wrap
+    except Exception:
+        pass
 
 def _merge(ws, r1, c1, r2, c2):
     _range(ws, r1, c1, r2, c2).merge()
@@ -80,27 +103,33 @@ def _fill(ws, r1, c1, r2, c2, bg):
 
 def _font(ws, r1, c1, r2, c2, fg=None, bold=False, size=None):
     rng = _range(ws, r1, c1, r2, c2)
-    if fg:
-        rng.api.Font.Color = _rgb(fg)
-    rng.api.Font.Bold = bold
-    if size:
-        rng.api.Font.Size = size
+    try:
+        rng.font.bold = bold
+        if fg:
+            rng.font.color = fg
+        if size:
+            rng.font.size = size
+    except Exception:
+        pass
 
 def _border_box(ws, r1, c1, r2, c2, color=C_BORDER, weight=2):
     """Draw a thin border around a range."""
     rng = _range(ws, r1, c1, r2, c2)
-    for edge in ["BorderAround"]:
-        try:
+    try:
+        if _IS_MAC:
+            rng.api.border_around(line_style=1, weight=weight,
+                                   color=_rgb(color))
+        else:
             rng.api.BorderAround(LineStyle=1, Weight=weight,
                                   Color=_rgb(color))
-        except Exception:
-            pass
+    except Exception:
+        pass
 
 def _row_height(ws, row, height):
-    ws.range(row, 1).row_height = height
+    ws.range((row, 1)).row_height = height
 
 def _col_width(ws, col, width):
-    ws.range(1, col).column_width = width
+    ws.range((1, col)).column_width = width
 
 def _halign(a):
     return {
@@ -130,24 +159,19 @@ def _pct(n, d):
 def _read_ca_data(wb):
     """
     Read Common Area sheet and return stats dict.
+    Returns None if sheet not found or empty.
     """
     try:
-        ws = wb.sheets[CA_SHEET]
+        ws   = wb.sheets[CA_SHEET]
+        data = ws.used_range.value
     except Exception:
         return None
 
-    data = ws.used_range.value
     if not data or len(data) < 2:
         return None
 
-    total = 0
-    complete = 0
-    setup = 0
-    verified = 0
-    discrepancy = 0
-    partial = 0
-    not_found = 0
-    last_run = None
+    total = complete = setup = verified = discrepancy = partial = not_found = 0
+    last_run   = None
     site_stats = {}
 
     for row in data[1:]:
@@ -166,10 +190,10 @@ def _read_ca_data(wb):
         else:
             setup += 1
 
-        if datast == "Verified":       verified     += 1
-        elif datast == "Discrepancy":  discrepancy  += 1
-        elif datast == "Partial":      partial      += 1
-        elif datast == "Not Found in CSV": not_found += 1
+        if datast == "Verified":           verified     += 1
+        elif datast == "Discrepancy":      discrepancy  += 1
+        elif datast == "Partial":          partial      += 1
+        elif datast == "Not Found in CSV": not_found    += 1
 
         if site not in site_stats:
             site_stats[site] = {"total": 0, "complete": 0, "setup": 0}
@@ -407,9 +431,8 @@ def _draw_site_table(ws, row, stats):
         # Color the % done cell
         pct_cell = _cell(ws, row, 7)
         pct_cell.color = row_bg
-        pct_cell.api.Font.Color = _rgb(
-            C_COMPLETE_FG if pct == 100 else C_SETUP_FG if pct == 0 else C_WARN_FG)
-        pct_cell.api.Font.Bold = True
+        _fmt_cell(pct_cell, bold=True,
+                  fg=C_COMPLETE_FG if pct == 100 else C_SETUP_FG if pct == 0 else C_WARN_FG)
 
         _border_box(ws, row, 2, row, 7)
         row += 1
@@ -479,11 +502,17 @@ def _build(wb):
         wb.sheets.add(DASHBOARD_SHEET, after=wb.sheets[0])
         ws = wb.sheets[DASHBOARD_SHEET]
 
-    ws.activate()
+    try:
+        ws.activate()
+    except Exception:
+        pass
 
     # Hide gridlines
     try:
-        ws.api.DisplayGridlines = False
+        if _IS_MAC:
+            ws.api.display_gridlines.set(False)
+        else:
+            ws.api.DisplayGridlines = False
     except Exception:
         pass
 
@@ -526,8 +555,12 @@ def _build(wb):
 
     # Freeze top rows
     try:
-        ws.range("B3").api.Select()
-        wb.app.api.ActiveWindow.FreezePanes = True
+        if _IS_MAC:
+            ws.range("B3").select()
+            wb.app.api.active_window.freeze_panes.set(True)
+        else:
+            ws.range("B3").api.Select()
+            wb.app.api.ActiveWindow.FreezePanes = True
     except Exception:
         pass
 
