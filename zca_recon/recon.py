@@ -29,9 +29,6 @@ DASH_LABEL  = "ZP CA Last Update:"
 AP          = "'"  # apostrophe used in desk phone column headers
 
 # ── Export column map ─────────────────────────────────────────────────────────
-# Each tuple: (output CSV header, source sheet column)
-# Indices 9 & 10 (Phone Number, Outbound Caller ID) are filled dynamically
-# based on the user's Zoom Temp vs Actual selection at export time.
 EXPORT_COLS = [
     ("Display Name",                          "Display Name"),
     ("Package",                               PKG_HDR),
@@ -60,34 +57,45 @@ EXPORT_COLS = [
 ]
 
 
-# Dialog helpers are in dialogs.py — imported as dlg
+# ── Workbook resolver ─────────────────────────────────────────────────────────
+
+def _get_wb():
+    """
+    Get the calling workbook. Works via RunPython or Application.Run.
+    Falls back to finding the first open non-addin workbook.
+    """
+    try:
+        return xw.Book.caller()
+    except Exception:
+        pass
+    try:
+        for app in xw.apps:
+            for book in app.books:
+                if not book.name.endswith(('.xlam', '.xla')):
+                    return book
+    except Exception:
+        pass
+    return None
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
 def strip_unwanted_packages(val):
-    """
-    Remove 'Zoom Meetings' entries from a comma-separated package string.
-    e.g. 'Zoom Phone, Zoom Meetings' -> 'Zoom Phone'
-    """
     if not val:
         return ""
     parts = [p.strip() for p in str(val).split(",")]
     return ", ".join(p for p in parts if "zoom meetings" not in p.lower())
 
+
 def _get_sheet(wb):
-    """Return the tracking worksheet, or None with an error dialog."""
     try:
         return wb.sheets[SHEET_NAME]
     except Exception:
         dlg.info("Error", f"Could not find '{SHEET_NAME}' sheet.")
         return None
 
+
 def _read_df(ws):
-    """
-    Read the entire used range of ws into a DataFrame.
-    DataFrame index = Excel row numbers (1-based) so we can write back directly.
-    """
     data = ws.used_range.value
     if not data or len(data) < 2:
         return pd.DataFrame()
@@ -96,23 +104,20 @@ def _read_df(ws):
     df.index = range(2, 2 + len(df))
     return df
 
+
 def _write(ws, excel_row, headers, col_name, value):
-    """Write value to (excel_row, col_name) if col_name exists in headers."""
+    """Write value to cell — uses tuple syntax for Mac compatibility."""
     if col_name in headers:
-        ws.range(excel_row, headers.index(col_name) + 1).value = value
+        ws.range((excel_row, headers.index(col_name) + 1)).value = value
+
 
 def _color_status(ws, df):
-    """
-    Apply background color to the status column based on cell value:
-      Complete -> green
-      Setup    -> red/pink
-      other    -> clear
-    """
+    """Color-code the status column: Complete=green, Setup=red."""
     if STATUS_HDR not in df.columns:
         return
     col_idx = list(df.columns).index(STATUS_HDR) + 1
     for row, val in zip(df.index, df[STATUS_HDR]):
-        cell = ws.range(row, col_idx)
+        cell = ws.range((row, col_idx))
         val = str(val).strip() if val else ""
         if val == "Complete":
             cell.color = (198, 239, 206)
@@ -121,11 +126,9 @@ def _color_status(ws, df):
         else:
             cell.color = None
 
+
 def _stamp_dashboard(wb):
-    """
-    Write the current timestamp next to the DASH_LABEL cell on the Dashboard sheet.
-    Falls back to J19 if the label cell is not found.
-    """
+    """Write last-run timestamp to the Dashboard sheet."""
     try:
         dash = wb.sheets["Dashboard"]
     except Exception:
@@ -137,7 +140,7 @@ def _stamp_dashboard(wb):
             continue
         for c_idx, cell in enumerate(row):
             if cell and str(cell).strip() == DASH_LABEL:
-                dash.range(r_idx + 1, c_idx + 2).value = now_str
+                dash.range((r_idx + 1, c_idx + 2)).value = now_str
                 return
     try:
         dash.range("J19").value = now_str
@@ -145,15 +148,12 @@ def _stamp_dashboard(wb):
         pass
 
 
-# ── Public entry points (called from Excel) ───────────────────────────────────
+# ── Public entry points ───────────────────────────────────────────────────────
 
 def run_reconciliation():
-    """
-    Main entry point.
-    Shows clean intro dialog with Import / Skip / Cancel options.
-    Routes to _run_with_csv or _run_without_csv.
-    """
-    wb = xw.Book.caller()
+    wb = _get_wb()
+    if not wb:
+        dlg.info("Error", "Could not find open workbook."); return
     action = dlg.show_intro()
     if action is None:
         return
@@ -164,34 +164,22 @@ def run_reconciliation():
 
 
 def export_update():
-    """
-    Standalone export: rows where status=Setup and data status is
-    Discrepancy or Partial (i.e. found in source but fields don't match).
-    """
-    _export(xw.Book.caller(), "update")
+    wb = _get_wb()
+    if not wb:
+        dlg.info("Error", "Could not find open workbook."); return
+    _export(wb, "update")
 
 
 def export_add():
-    """
-    Standalone export: rows where status=Setup and data status is
-    Not Found in CSV (i.e. not present in source system at all).
-    """
-    _export(xw.Book.caller(), "add")
+    wb = _get_wb()
+    if not wb:
+        dlg.info("Error", "Could not find open workbook."); return
+    _export(wb, "add")
 
 
 # ── Reconciliation logic ──────────────────────────────────────────────────────
 
 def _run_with_csv(wb):
-    """
-    Import source CSV, compare each extension against the tracking sheet,
-    write status/package/date back, color-code, stamp dashboard.
-
-    Status logic:
-      All key fields match              -> Complete  / Verified
-      Display name or site name match   -> Setup     / Discrepancy
-      No fields match                   -> Setup     / Partial
-      Extension not in CSV              -> Setup     / Not Found in CSV
-    """
     csv_path = dlg.pick_csv()
     if not csv_path:
         return
@@ -205,7 +193,6 @@ def _run_with_csv(wb):
     if EXT_HDR not in df_csv.columns:
         dlg.info("Error", f"'{EXT_HDR}' not found in CSV.\n\nFound: {', '.join(df_csv.columns)}"); return
 
-    # Build lookup keyed by lowercase extension for case-insensitive matching
     df_csv["_key"] = df_csv[EXT_HDR].str.strip().str.lower()
     lookup = df_csv.drop_duplicates("_key").set_index("_key")
 
@@ -227,12 +214,10 @@ def _run_with_csv(wb):
     cnt = dict(complete=0, disc=0, progress=0, incomplete=0)
 
     def sv(row, col):
-        """Sheet value — normalized for comparison."""
         v = row.get(col, "") if col in row.index else ""
         return str(v).strip().lower()
 
     def cv(cr, col):
-        """CSV value — normalized for comparison."""
         v = cr.get(col, "") if col in cr.index else ""
         return str(v).strip().lower()
 
@@ -246,14 +231,12 @@ def _run_with_csv(wb):
         if key in lookup.index:
             cr = lookup.loc[key]
 
-            # Sync package from source CSV -> tracking sheet
             if PKG_HDR in headers and "Package" in cr.index:
                 _write(ws, excel_row, headers, PKG_HDR,
                        strip_unwanted_packages(cr.get("Package", "")))
 
             _write(ws, excel_row, headers, DATASRC_HDR, "Source CSV")
 
-            # Field comparisons
             disp  = sv(row, "Display Name")  == cv(cr, "Display Name")
             site  = sv(row, "Site Name")     == cv(cr, "Site Name")
             phone = sv(row, "Phone Number (Zoom Temp)") == cv(cr, "Phone Number")
@@ -284,7 +267,6 @@ def _run_with_csv(wb):
     _color_status(ws, _read_df(ws))
     _stamp_dashboard(wb)
 
-    # Single results window with checkboxes — no multiple popups
     exports = dlg.show_results(cnt)
     if "update" in exports:
         _export(wb, "update")
@@ -293,12 +275,6 @@ def _run_with_csv(wb):
 
 
 def _run_without_csv(wb):
-    """
-    No CSV import path.
-    If no statuses exist yet: offer to mark all rows as Setup Incomplete
-    and export an Add file.
-    If statuses already exist: skip to export prompts.
-    """
     ws = _get_sheet(wb)
     if ws is None:
         return
@@ -313,18 +289,8 @@ def _run_without_csv(wb):
     count = (statuses != "").sum()
 
     if count == 0:
-        dlg.info("CA Reconciliation", "No statuses found. No rows have been reconciled yet.")
-        from tkinter import messagebox
-        import tkinter as tk
-        r = tk.Tk(); r.withdraw()
-        ans = messagebox.askyesnocancel(
-            "CA Reconciliation",
-            "Mark all rows as Setup Incomplete and export an Add file?",
-            parent=r)
-        r.destroy()
-        if ans is None:
-            return
-        if ans:
+        exports = dlg.show_results({"complete": 0, "disc": 0, "progress": 0, "incomplete": len(df)})
+        if "add" in exports:
             today = datetime.now().strftime("%m-%d-%Y %H:%M")
             for excel_row, row in df.iterrows():
                 if str(row.iloc[0]).strip():
@@ -336,9 +302,17 @@ def _run_without_csv(wb):
             _stamp_dashboard(wb)
             _export(wb, "add")
     else:
-        dlg.info("CA Reconciliation",
-                 f"{count} row(s) already have statuses. Skipping import.")
-        exports = dlg.show_results({"complete": 0, "disc": 0, "progress": 0, "incomplete": 0})
+        # Re-read actual counts from sheet
+        df2 = _read_df(ws)
+        s = df2.get(STATUS_HDR, pd.Series()).astype(str).str.strip()
+        d = df2.get(DATAST_HDR, pd.Series()).astype(str).str.strip()
+        cnt = dict(
+            complete   = int((s == "Complete").sum()),
+            disc       = int((d == "Discrepancy").sum()),
+            progress   = int((d == "Partial").sum()),
+            incomplete = int((d == "Not Found in CSV").sum()),
+        )
+        exports = dlg.show_results(cnt)
         if "update" in exports:
             _export(wb, "update")
         if "add" in exports:
@@ -346,17 +320,6 @@ def _run_without_csv(wb):
 
 
 def _export(wb, export_type):
-    """
-    Build and save a filtered CSV.
-
-    export_type='update': rows where status=Setup AND data status in
-                          [Discrepancy, Partial] — exists in source but wrong
-    export_type='add':    rows where status=Setup AND data status =
-                          Not Found in CSV — not in source system yet
-
-    If no Data Status column exists, all Setup rows are included in both exports.
-    User is asked whether to use Zoom Temp phone numbers or actual numbers.
-    """
     ws = _get_sheet(wb)
     if ws is None:
         return
@@ -376,18 +339,16 @@ def _export(wb, export_type):
     if export_type == "update":
         suggested, title = f"CA_Update_{date_str}.csv", "Save Update CSV"
     else:
-        suggested, title = f"CA_Add_{date_str}.csv", "Save Add CSV"
+        suggested, title = f"CA_Add_{date_str}.csv",    "Save Add CSV"
 
     save_path = dlg.get_save_path(suggested, title)
     if not save_path:
         return
 
-    # Resolve phone/OCID source columns based on user selection
     cols = list(EXPORT_COLS)
     cols[9]  = ("Phone Number",       "Phone Number (Zoom Temp)" if use_temp else "Phone Number")
     cols[10] = ("Outbound Caller ID", "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID")
 
-    # Row filter
     s = df[STATUS_HDR].astype(str).str.strip()
     d = df.get(DATAST_HDR, pd.Series([""] * len(df), index=df.index)).astype(str).str.strip()
 
@@ -401,10 +362,8 @@ def _export(wb, export_type):
     filtered = df[mask]
 
     if filtered.empty:
-        dlg.info("Nothing to Export",
-             "No matching rows found for this export type."); return
+        dlg.info("Nothing to Export", "No matching rows found for this export type."); return
 
-    # Build output rows
     out_rows = []
     for _, row in filtered.iterrows():
         out_row = {}
