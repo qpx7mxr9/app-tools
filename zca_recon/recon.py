@@ -258,24 +258,33 @@ def _run_with_csv(wb):
 
             _write(ws, excel_row, headers, DATASRC_HDR, "Source CSV")
 
-            disp  = sv(row, "Display Name")  == cv(cr, "Display Name")
-            site  = sv(row, "Site Name")     == cv(cr, "Site Name")
-            phone = sv(row, "Phone Number (Zoom Temp)") == cv(cr, "Phone Number")
-            ocid  = sv(row, "Outbound Caller ID (Zoom Temp)") == cv(cr, "Outbound Caller ID")
-            dp    = sv(row, f"Desk Phone 1{AP}s Brand") == cv(cr, f"Desk Phone 1{AP}s Brand")
+            # Compare identifying fields (sheet vs CSV)
+            disp = sv(row, "Display Name") == cv(cr, "Display Name")
+            site = sv(row, "Site Name")    == cv(cr, "Site Name")
+
+            # Phone / OCID: compare actual columns; treat both-empty as matching
+            s_ph, c_ph   = sv(row, "Phone Number"),       cv(cr, "Phone Number")
+            s_oc, c_oc   = sv(row, "Outbound Caller ID"), cv(cr, "Outbound Caller ID")
+            phone = (not s_ph and not c_ph) or (s_ph == c_ph)
+            ocid  = (not s_oc and not c_oc) or (s_oc == c_oc)
+
+            dp = sv(row, f"Desk Phone 1{AP}s Brand") == cv(cr, f"Desk Phone 1{AP}s Brand")
 
             if disp and site and phone and ocid and dp:
+                # All key fields match
                 status = "Complete"
                 _write(ws, excel_row, headers, DATAST_HDR, "Verified")
                 cnt["complete"] += 1
-            elif disp or site:
-                status = "Setup"
-                _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
-                cnt["disc"] += 1
-            else:
+            elif disp and site:
+                # Name + site match; phone / desk phone details differ → Partial
                 status = "Setup"
                 _write(ws, excel_row, headers, DATAST_HDR, "Partial")
                 cnt["progress"] += 1
+            else:
+                # Display name or site doesn't match → real discrepancy
+                status = "Setup"
+                _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
+                cnt["disc"] += 1
         else:
             status = "Setup"
             _write(ws, excel_row, headers, DATASRC_HDR, "Sheet Only")
