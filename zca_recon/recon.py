@@ -130,9 +130,9 @@ import tempfile as _tempfile, os as _os
 LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zca_recon.log")
 
 
-def _highlight_mismatches(ws, excel_row, headers, mismatch_cols):
+def _highlight_mismatches(ws, excel_row, headers, mismatch_cols, compare_cols):
     """Highlight specific cells orange where the sheet value differs from the CSV."""
-    for col_name in COMPARE_COLS:
+    for col_name in compare_cols:
         if col_name not in headers:
             continue
         col_idx = headers.index(col_name) + 1
@@ -143,9 +143,9 @@ def _highlight_mismatches(ws, excel_row, headers, mismatch_cols):
             cell.color = None
 
 
-def _clear_mismatch_highlights(ws, df, headers):
+def _clear_mismatch_highlights(ws, df, headers, compare_cols):
     """Clear all mismatch highlights from compared columns before a fresh run."""
-    for col_name in COMPARE_COLS:
+    for col_name in compare_cols:
         if col_name not in headers:
             continue
         col_idx = headers.index(col_name) + 1
@@ -278,6 +278,23 @@ def _run_with_csv(wb):
     if STATUS_HDR not in headers:
         dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
+    # ── Ask which phone columns to compare against ────────────────────────────
+    phone_source = dlg.ask_phone_source()
+    if phone_source is None:
+        return
+    use_temp = phone_source == "temp"
+    phone_sheet_col = "Phone Number (Zoom Temp)" if use_temp else "Phone Number"
+    ocid_sheet_col  = "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID"
+
+    compare_cols = [
+        "Display Name",
+        "Site Name",
+        phone_sheet_col,
+        ocid_sheet_col,
+        f"Desk Phone 1{AP}s Brand",
+    ]
+    _log(f"phone_source={phone_source}  phone_col={phone_sheet_col}")
+
     today = datetime.now().strftime("%m-%d-%Y %H:%M")
     cnt = dict(complete=0, disc=0, progress=0, incomplete=0)
     total_rows = len(df)
@@ -298,7 +315,7 @@ def _run_with_csv(wb):
     _log(f"CSV sample keys: {sample_keys}")
 
     prog.update("Clearing previous highlights...")
-    _clear_mismatch_highlights(ws, df, headers)
+    _clear_mismatch_highlights(ws, df, headers, compare_cols)
 
     try:
         for i, (excel_row, row) in enumerate(df.iterrows()):
@@ -324,9 +341,11 @@ def _run_with_csv(wb):
                 disp = sv(row, "Display Name") == cv(cr, "Display Name")
                 site = sv(row, "Site Name")    == cv(cr, "Site Name")
 
-                # Phone / OCID: compare actual columns; treat both-empty as matching
-                s_ph, c_ph   = sv(row, "Phone Number"),       cv(cr, "Phone Number")
-                s_oc, c_oc   = sv(row, "Outbound Caller ID"), cv(cr, "Outbound Caller ID")
+                # Phone / OCID: compare chosen sheet columns vs CSV actual columns
+                s_ph = sv(row, phone_sheet_col)
+                s_oc = sv(row, ocid_sheet_col)
+                c_ph = cv(cr, "Phone Number")
+                c_oc = cv(cr, "Outbound Caller ID")
                 phone = (not s_ph and not c_ph) or (s_ph == c_ph)
                 ocid  = (not s_oc and not c_oc) or (s_oc == c_oc)
 
@@ -336,17 +355,17 @@ def _run_with_csv(wb):
                     # All key fields match
                     status = "Complete"
                     _write(ws, excel_row, headers, DATAST_HDR, "Verified")
-                    _highlight_mismatches(ws, excel_row, headers, set())
+                    _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
                     cnt["complete"] += 1
                 elif disp and site:
                     # Name + site match; phone / desk phone details differ
                     status = "In Progress"
                     _write(ws, excel_row, headers, DATAST_HDR, "Partial")
                     mismatches = set()
-                    if not phone: mismatches.add("Phone Number")
-                    if not ocid:  mismatches.add("Outbound Caller ID")
+                    if not phone: mismatches.add(phone_sheet_col)
+                    if not ocid:  mismatches.add(ocid_sheet_col)
                     if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
-                    _highlight_mismatches(ws, excel_row, headers, mismatches)
+                    _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                     cnt["progress"] += 1
                 else:
                     # Display name or site doesn't match
@@ -355,10 +374,10 @@ def _run_with_csv(wb):
                     mismatches = set()
                     if not disp:  mismatches.add("Display Name")
                     if not site:  mismatches.add("Site Name")
-                    if not phone: mismatches.add("Phone Number")
-                    if not ocid:  mismatches.add("Outbound Caller ID")
+                    if not phone: mismatches.add(phone_sheet_col)
+                    if not ocid:  mismatches.add(ocid_sheet_col)
                     if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
-                    _highlight_mismatches(ws, excel_row, headers, mismatches)
+                    _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                     cnt["disc"] += 1
             else:
                 status = "Not Found in CSV"
