@@ -326,28 +326,36 @@ def _run_without_csv(wb):
             _stamp_dashboard(wb)
             _export(wb, "add")
     else:
-        # Re-read actual counts from sheet
-        df2 = _read_df(ws)
-        empty_s = pd.Series([""] * len(df2), index=df2.index)
-        s = (df2[STATUS_HDR]  if STATUS_HDR  in df2.columns else empty_s).astype(str).str.strip()
-        d = (df2[DATAST_HDR]  if DATAST_HDR  in df2.columns else empty_s).astype(str).str.strip()
-        cnt = dict(
-            complete   = int((s == "Complete").sum()),
-            disc       = int((d == "Discrepancy").sum()),
-            progress   = int((d == "Partial").sum()),
-            incomplete = int((d == "Not Found in CSV").sum()),
-        )
-        exports = dlg.show_results(cnt)
-        if "update" in exports:
-            _export(wb, "update")
-        if "add" in exports:
-            _export(wb, "add")
+        try:
+            df2 = _read_df(ws)
+            _log(f"df2 rows={len(df2)}")
+            empty_s = pd.Series([""] * len(df2), index=df2.index)
+            s = (df2[STATUS_HDR]  if STATUS_HDR  in df2.columns else empty_s).astype(str).str.strip()
+            d = (df2[DATAST_HDR]  if DATAST_HDR  in df2.columns else empty_s).astype(str).str.strip()
+            cnt = dict(
+                complete   = int((s == "Complete").sum()),
+                disc       = int((d == "Discrepancy").sum()),
+                progress   = int((d == "Partial").sum()),
+                incomplete = int((d == "Not Found in CSV").sum()),
+            )
+            _log(f"cnt={cnt}")
+            exports = dlg.show_results(cnt)
+            _log(f"exports={exports}")
+            if "update" in exports:
+                _export(wb, "update")
+            if "add" in exports:
+                _export(wb, "add")
+        except Exception as e:
+            import traceback
+            _log(f"ERROR in skip path: {e}\n{traceback.format_exc()}")
+            dlg.info("Error", str(e))
 
 
 def _export(wb, export_type):
+    _log(f"_export start type={export_type}")
     ws = _get_sheet(wb)
     if ws is None:
-        return
+        _log("sheet not found in export"); return
 
     df = _read_df(ws)
     headers = list(df.columns)
@@ -356,6 +364,7 @@ def _export(wb, export_type):
         dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
     phone_choice = dlg.ask_phone_source()
+    _log(f"phone_choice={phone_choice}")
     if phone_choice is None:
         return
     use_temp = phone_choice == "temp"
@@ -367,6 +376,7 @@ def _export(wb, export_type):
         suggested, title = f"CA_Add_{date_str}.csv",    "Save Add CSV"
 
     save_path = dlg.get_save_path(suggested, title)
+    _log(f"save_path={save_path}")
     if not save_path:
         return
 
@@ -404,5 +414,11 @@ def _export(wb, export_type):
         out_rows.append(out_row)
 
     out_df = pd.DataFrame(out_rows, columns=[h for h, _ in cols])
-    out_df.to_csv(save_path, index=False)
-    dlg.info("Export Complete", f"{len(out_df)} row(s) exported.\n{save_path}")
+    _log(f"filtered={len(filtered)} out_rows={len(out_df)}")
+    try:
+        out_df.to_csv(save_path, index=False)
+        _log("CSV saved ok")
+        dlg.info("Export Complete", f"{len(out_df)} row(s) exported.\n{save_path}")
+    except Exception as e:
+        _log(f"CSV save error: {e}")
+        dlg.info("Export Error", str(e))
