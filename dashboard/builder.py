@@ -501,11 +501,33 @@ def _draw_buttons(ws, row):
 
 # ── Public entry points ───────────────────────────────────────
 
+def _get_caller_wb():
+    """
+    Get the calling workbook — works whether called via RunPython or Application.Run.
+    Falls back to finding the first non-addin open workbook.
+    """
+    try:
+        return xw.Book.caller()
+    except Exception:
+        pass
+    # Fallback: find the open workbook (first non-addin book)
+    try:
+        for app in xw.apps:
+            for book in app.books:
+                if not book.name.endswith('.xlam') and not book.name.endswith('.xla'):
+                    return book
+    except Exception:
+        pass
+    return None
+
+
 def build_dashboard():
     """
-    Full dashboard build — called from Excel button via RunPython.
+    Full dashboard build — called from Excel button via RunPython or Application.Run.
     """
-    _build(xw.Book.caller())
+    wb = _get_caller_wb()
+    if wb:
+        _build(wb)
 
 
 def build_for_workbook(wb_path):
@@ -524,8 +546,10 @@ def build_for_workbook(wb_path):
 
 
 def refresh_ca_block():
-    """Fast refresh — alias for build_dashboard (always full rebuild)."""
-    _build(xw.Book.caller())
+    """Fast refresh — re-reads CA data and rebuilds dashboard."""
+    wb = _get_caller_wb()
+    if wb:
+        _build(wb)
 
 
 def _build(wb):
