@@ -304,8 +304,9 @@ def _run_without_csv(wb):
     else:
         # Re-read actual counts from sheet
         df2 = _read_df(ws)
-        s = df2.get(STATUS_HDR, pd.Series()).astype(str).str.strip()
-        d = df2.get(DATAST_HDR, pd.Series()).astype(str).str.strip()
+        empty_s = pd.Series([""] * len(df2), index=df2.index)
+        s = (df2[STATUS_HDR]  if STATUS_HDR  in df2.columns else empty_s).astype(str).str.strip()
+        d = (df2[DATAST_HDR]  if DATAST_HDR  in df2.columns else empty_s).astype(str).str.strip()
         cnt = dict(
             complete   = int((s == "Complete").sum()),
             disc       = int((d == "Discrepancy").sum()),

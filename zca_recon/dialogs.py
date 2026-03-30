@@ -284,6 +284,17 @@ def _root():
         r.attributes("-topmost", True)
     except Exception:
         pass
+    # Force Python to the front on Mac so windows don't hide behind Excel
+    try:
+        import subprocess, platform
+        if platform.system() == "Darwin":
+            subprocess.Popen(
+                ["osascript", "-e",
+                 'tell application "System Events" to set frontmost of '
+                 'first process whose name starts with "Python" to true'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
     return r
 
 
