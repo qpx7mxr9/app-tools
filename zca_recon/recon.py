@@ -115,7 +115,8 @@ def _write(ws, excel_row, headers, col_name, value):
             _log(f"Write failed row={excel_row} col={col_name}({col_idx}): {e}")
 
 
-LOG_PATH = "/tmp/zca_recon.log"
+import tempfile as _tempfile, os as _os
+LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zca_recon.log")
 
 def _log(msg):
     try:

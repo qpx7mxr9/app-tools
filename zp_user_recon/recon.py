@@ -70,7 +70,8 @@ BRAND_WORKPLACE_APP = "workplace app"
 COLOR_GOOD   = (198, 239, 206)   # green
 COLOR_CHANGE = (255, 235, 156)   # yellow
 
-LOG_PATH = "/tmp/zp_user_recon.log"
+import tempfile as _tempfile, os as _os
+LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zp_user_recon.log")
 
 
 # ── Workbook / sheet helpers ──────────────────────────────────────────────────

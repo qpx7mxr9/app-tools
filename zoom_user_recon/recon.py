@@ -33,7 +33,8 @@ COL_LICENSE  = "Zoom License Status"
 COL_EXTERNAL = "Zoom User External Info"
 DASH_LABEL   = "Zoom User Last Update:"
 
-LOG_PATH = "/tmp/zoom_user_recon.log"
+import tempfile as _tempfile, os as _os
+LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zoom_user_recon.log")
 
 # Status → (background RGB, font RGB)
 _STATUS_COLORS = {
