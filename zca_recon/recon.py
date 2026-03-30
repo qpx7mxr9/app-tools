@@ -28,6 +28,17 @@ DATAST_HDR  = "Data Status"
 DASH_LABEL  = "ZP CA Last Update:"
 AP          = "'"  # apostrophe used in desk phone column headers
 
+# Columns compared during reconciliation (used for mismatch highlighting)
+COMPARE_COLS = [
+    "Display Name",
+    "Site Name",
+    "Phone Number",
+    "Outbound Caller ID",
+    f"Desk Phone 1{AP}s Brand",
+]
+
+MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
+
 # ── Export column map ─────────────────────────────────────────────────────────
 EXPORT_COLS = [
     ("Display Name",                          "Display Name"),
@@ -117,6 +128,29 @@ def _write(ws, excel_row, headers, col_name, value):
 
 import tempfile as _tempfile, os as _os
 LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zca_recon.log")
+
+
+def _highlight_mismatches(ws, excel_row, headers, mismatch_cols):
+    """Highlight specific cells orange where the sheet value differs from the CSV."""
+    for col_name in COMPARE_COLS:
+        if col_name not in headers:
+            continue
+        col_idx = headers.index(col_name) + 1
+        cell = ws.range((excel_row, col_idx))
+        if col_name in mismatch_cols:
+            cell.color = MISMATCH_COLOR
+        else:
+            cell.color = None
+
+
+def _clear_mismatch_highlights(ws, df, headers):
+    """Clear all mismatch highlights from compared columns before a fresh run."""
+    for col_name in COMPARE_COLS:
+        if col_name not in headers:
+            continue
+        col_idx = headers.index(col_name) + 1
+        for excel_row in df.index:
+            ws.range((excel_row, col_idx)).color = None
 
 def _log(msg):
     try:
@@ -263,6 +297,9 @@ def _run_with_csv(wb):
     sample_keys = list(lookup.index[:5])
     _log(f"CSV sample keys: {sample_keys}")
 
+    prog.update("Clearing previous highlights...")
+    _clear_mismatch_highlights(ws, df, headers)
+
     try:
         for i, (excel_row, row) in enumerate(df.iterrows()):
             if i % 5 == 0:
@@ -299,16 +336,29 @@ def _run_with_csv(wb):
                     # All key fields match
                     status = "Complete"
                     _write(ws, excel_row, headers, DATAST_HDR, "Verified")
+                    _highlight_mismatches(ws, excel_row, headers, set())
                     cnt["complete"] += 1
                 elif disp and site:
                     # Name + site match; phone / desk phone details differ
                     status = "In Progress"
                     _write(ws, excel_row, headers, DATAST_HDR, "Partial")
+                    mismatches = set()
+                    if not phone: mismatches.add("Phone Number")
+                    if not ocid:  mismatches.add("Outbound Caller ID")
+                    if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
+                    _highlight_mismatches(ws, excel_row, headers, mismatches)
                     cnt["progress"] += 1
                 else:
                     # Display name or site doesn't match
                     status = "Discrepancy"
                     _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
+                    mismatches = set()
+                    if not disp:  mismatches.add("Display Name")
+                    if not site:  mismatches.add("Site Name")
+                    if not phone: mismatches.add("Phone Number")
+                    if not ocid:  mismatches.add("Outbound Caller ID")
+                    if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
+                    _highlight_mismatches(ws, excel_row, headers, mismatches)
                     cnt["disc"] += 1
             else:
                 status = "Not Found in CSV"
