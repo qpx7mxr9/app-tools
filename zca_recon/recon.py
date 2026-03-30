@@ -126,7 +126,7 @@ def _log(msg):
 
 
 def _color_status(ws, df):
-    """Color-code the status column: Complete=green, Setup=red."""
+    """Color-code the Common Area Status column."""
     if STATUS_HDR not in df.columns:
         return
     col_idx = list(df.columns).index(STATUS_HDR) + 1
@@ -134,9 +134,13 @@ def _color_status(ws, df):
         cell = ws.range((row, col_idx))
         val = str(val).strip() if val else ""
         if val == "Complete":
-            cell.color = (198, 239, 206)
-        elif val == "Setup":
-            cell.color = (255, 199, 206)
+            cell.color = (198, 239, 206)   # green
+        elif val == "In Progress":
+            cell.color = (255, 235, 156)   # yellow
+        elif val == "Discrepancy":
+            cell.color = (255, 199, 206)   # red
+        elif val == "Not Found in CSV":
+            cell.color = (252, 228, 214)   # orange
         else:
             cell.color = None
 
@@ -290,17 +294,17 @@ def _run_with_csv(wb):
                 _write(ws, excel_row, headers, DATAST_HDR, "Verified")
                 cnt["complete"] += 1
             elif disp and site:
-                # Name + site match; phone / desk phone details differ → Partial
-                status = "Setup"
+                # Name + site match; phone / desk phone details differ
+                status = "In Progress"
                 _write(ws, excel_row, headers, DATAST_HDR, "Partial")
                 cnt["progress"] += 1
             else:
-                # Display name or site doesn't match → real discrepancy
-                status = "Setup"
+                # Display name or site doesn't match
+                status = "Discrepancy"
                 _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
                 cnt["disc"] += 1
         else:
-            status = "Setup"
+            status = "Not Found in CSV"
             _write(ws, excel_row, headers, DATASRC_HDR, "Sheet Only")
             _write(ws, excel_row, headers, DATAST_HDR,  "Not Found in CSV")
             cnt["incomplete"] += 1
@@ -342,7 +346,7 @@ def _run_without_csv(wb):
             today = datetime.now().strftime("%m-%d-%Y %H:%M")
             for excel_row, row in df.iterrows():
                 if str(row.iloc[0]).strip():
-                    _write(ws, excel_row, headers, STATUS_HDR,  "Setup")
+                    _write(ws, excel_row, headers, STATUS_HDR,  "Not Found in CSV")
                     _write(ws, excel_row, headers, DATE_HDR,    today)
                     _write(ws, excel_row, headers, DATASRC_HDR, "Manual")
                     _write(ws, excel_row, headers, DATAST_HDR,  "Not Found in CSV")
@@ -354,13 +358,12 @@ def _run_without_csv(wb):
             df2 = _read_df(ws)
             _log(f"df2 rows={len(df2)}")
             empty_s = pd.Series([""] * len(df2), index=df2.index)
-            s = (df2[STATUS_HDR]  if STATUS_HDR  in df2.columns else empty_s).astype(str).str.strip()
-            d = (df2[DATAST_HDR]  if DATAST_HDR  in df2.columns else empty_s).astype(str).str.strip()
+            s = (df2[STATUS_HDR] if STATUS_HDR in df2.columns else empty_s).astype(str).str.strip()
             cnt = dict(
                 complete   = int((s == "Complete").sum()),
-                disc       = int((d == "Discrepancy").sum()),
-                progress   = int((d == "Partial").sum()),
-                incomplete = int((d == "Not Found in CSV").sum()),
+                disc       = int((s == "Discrepancy").sum()),
+                progress   = int((s == "In Progress").sum()),
+                incomplete = int((s == "Not Found in CSV").sum()),
             )
             _log(f"cnt={cnt}")
             exports = dlg.show_results(cnt)
@@ -409,14 +412,11 @@ def _export(wb, export_type):
     cols[10] = ("Outbound Caller ID", "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID")
 
     s = df[STATUS_HDR].astype(str).str.strip()
-    d = df.get(DATAST_HDR, pd.Series([""] * len(df), index=df.index)).astype(str).str.strip()
 
-    if DATAST_HDR not in headers:
-        mask = s == "Setup"
-    elif export_type == "update":
-        mask = (s == "Setup") & d.isin(["Discrepancy", "Partial"])
+    if export_type == "update":
+        mask = s.isin(["Discrepancy", "In Progress"])
     else:
-        mask = (s == "Setup") & (d == "Not Found in CSV")
+        mask = s == "Not Found in CSV"
 
     filtered = df[mask]
 
