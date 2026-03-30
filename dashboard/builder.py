@@ -21,6 +21,7 @@ _IS_MAC = platform.system() == "Darwin"
 # ── Sheet names ───────────────────────────────────────────────
 DASHBOARD_SHEET = "CA Tools"
 CA_SHEET        = "Common Area"
+USERS_SHEET     = "Users"
 
 # ── Column indices (0-based) on Common Area sheet ─────────────
 CA_COL_NAME     = 0   # Display Name
@@ -214,6 +215,91 @@ def _read_ca_data(wb):
         "not_found":   not_found,
         "last_run":    last_run,
         "sites":       site_stats,
+        "pct":         _pct(complete, total),
+    }
+
+
+# ── ZU / ZP data readers ─────────────────────────────────────
+
+def _find_hdr(headers, name):
+    for i, h in enumerate(headers):
+        if str(h or "").strip().lower() == name.lower():
+            return i
+    return -1
+
+
+def _read_zu_data(wb):
+    """Read Users sheet and return Zoom User Recon stats."""
+    try:
+        ws   = wb.sheets[USERS_SHEET]
+        data = ws.used_range.value
+    except Exception:
+        return None
+    if not data or len(data) < 2:
+        return None
+
+    headers    = [str(h or "").strip() for h in data[0]]
+    status_col = _find_hdr(headers, "Zoom User Status")
+    if status_col < 0:
+        return None
+
+    total = active = inactive = not_in_acct = pending = not_found = 0
+    for row in data[1:]:
+        if not row or not row[0]:
+            continue
+        total += 1
+        val = str(row[status_col] if len(row) > status_col and row[status_col] else "").strip().lower()
+        if val == "active - in account":       active       += 1
+        elif val == "inactive - in account":   inactive     += 1
+        elif val == "not in account":          not_in_acct  += 1
+        elif val == "pending activation":      pending      += 1
+        elif val == "not found":               not_found    += 1
+
+    return {
+        "total":          total,
+        "active":         active,
+        "inactive":       inactive,
+        "not_in_account": not_in_acct,
+        "pending":        pending,
+        "not_found":      not_found,
+        "pct":            _pct(active, total),
+    }
+
+
+def _read_zp_data(wb):
+    """Read Users sheet and return ZP User Recon stats."""
+    try:
+        ws   = wb.sheets[USERS_SHEET]
+        data = ws.used_range.value
+    except Exception:
+        return None
+    if not data or len(data) < 2:
+        return None
+
+    headers    = [str(h or "").strip() for h in data[0]]
+    status_col = _find_hdr(headers, "ZP User Status")
+    if status_col < 0:
+        return None
+
+    total = complete = progress = discrep = incomplete = 0
+    for row in data[1:]:
+        if not row or not row[0]:
+            continue
+        val = str(row[status_col] if len(row) > status_col and row[status_col] else "").strip()
+        if not val:
+            continue
+        total += 1
+        if val == "Setup Complete":       complete   += 1
+        elif val == "Setup in Progress":  progress   += 1
+        elif val == "Setup Discrepancy":  discrep    += 1
+        elif val == "Setup Incomplete":   incomplete += 1
+
+    return {
+        "total":       total,
+        "complete":    complete,
+        "progress":    progress,
+        "discrepancy": discrep,
+        "incomplete":  incomplete,
         "pct":         _pct(complete, total),
     }
 
@@ -499,6 +585,107 @@ def _draw_buttons(ws, row):
     return row + 2
 
 
+# ── ZU / ZP section drawers ──────────────────────────────────
+
+def _draw_zu_section(ws, row, zu):
+    """Draw Zoom User Recon section on the dashboard."""
+    row = _draw_section_header(ws, row,
+                               "ZOOM USER RECON",
+                               f"{zu['total']} users  ·  {zu['pct']}% active")
+    row = _draw_spacer(ws, row, 6)
+
+    # Stat cards: Total | Active | Not In Account | % Active
+    _row_height(ws, row,     14)
+    _row_height(ws, row + 1, 32)
+    _row_height(ws, row + 2, 20)
+    _row_height(ws, row + 3, 8)
+
+    cards = [
+        ("TOTAL",          zu["total"],          C_NEUTRAL_BG,  C_NEUTRAL_FG,  C_LABEL_FG),
+        ("ACTIVE",         zu["active"],          C_COMPLETE_BG, C_COMPLETE_FG, C_LABEL_FG),
+        ("NOT IN ACCOUNT", zu["not_in_account"],  C_SETUP_BG,    C_SETUP_FG,    C_LABEL_FG),
+        ("% ACTIVE",       f"{zu['pct']}%",       C_NEUTRAL_BG,  C_NEUTRAL_FG,  C_LABEL_FG),
+    ]
+    for i, (label, value, bg, val_fg, lbl_fg) in enumerate(cards):
+        c = [2, 4, 6, 8][i]
+        _merge(ws, row,     c, row,     c + 1)
+        _merge(ws, row + 1, c, row + 1, c + 1)
+        _merge(ws, row + 2, c, row + 2, c + 1)
+        _fill(ws, row,     c, row + 2, c + 1, bg)
+        _write(ws, row,     c, label, bold=True, size=8,  fg=lbl_fg, bg=bg, align="center")
+        _write(ws, row + 1, c, value, bold=True, size=20, fg=val_fg, bg=bg, align="center")
+        _write(ws, row + 2, c, "",    bg=bg)
+        _border_box(ws, row, c, row + 2, c + 1)
+    row += 4
+
+    # Breakdown row
+    _row_height(ws, row,     16)
+    _row_height(ws, row + 1, 12)
+    _row_height(ws, row + 2, 26)
+    _row_height(ws, row + 3, 8)
+    _merge(ws, row, 2, row, 9)
+    _write(ws, row, 2, "BREAKDOWN", bold=True, size=8, fg=C_LABEL_FG, bg=C_WHITE, align="left")
+
+    substats = [
+        ("INACTIVE",        zu["inactive"],       C_WARN_BG,     C_WARN_FG),
+        ("NOT IN ACCOUNT",  zu["not_in_account"], C_SETUP_BG,    C_SETUP_FG),
+        ("PENDING",         zu["pending"],        (221, 235, 247), (31, 73, 125)),
+        ("NOT FOUND",       zu["not_found"],      C_NEUTRAL_BG,  C_NEUTRAL_FG),
+    ]
+    for i, (label, value, bg, fg) in enumerate(substats):
+        c = [2, 4, 6, 8][i]
+        _merge(ws, row + 1, c, row + 1, c + 1)
+        _merge(ws, row + 2, c, row + 2, c + 1)
+        _fill(ws, row + 1, c, row + 2, c + 1, bg)
+        _write(ws, row + 1, c, label, bold=True, size=7,  fg=fg, bg=bg, align="center")
+        _write(ws, row + 2, c, value, bold=True, size=14, fg=fg, bg=bg, align="center")
+        _border_box(ws, row + 1, c, row + 2, c + 1)
+    row += 4
+
+    return _draw_spacer(ws, row, 8)
+
+
+def _draw_zp_section(ws, row, zp):
+    """Draw ZP User Recon section on the dashboard."""
+    row = _draw_section_header(ws, row,
+                               "ZOOM PHONE USER RECON",
+                               f"{zp['total']} users  ·  {zp['pct']}% complete")
+    row = _draw_spacer(ws, row, 6)
+    row = _draw_stat_cards(ws, row, {
+        "total":    zp["total"],
+        "complete": zp["complete"],
+        "setup":    zp["progress"] + zp["discrepancy"],
+        "pct":      zp["pct"],
+    })
+    row = _draw_progress_bar(ws, row, zp["pct"])
+
+    # Breakdown row
+    _row_height(ws, row,     16)
+    _row_height(ws, row + 1, 12)
+    _row_height(ws, row + 2, 26)
+    _row_height(ws, row + 3, 8)
+    _merge(ws, row, 2, row, 9)
+    _write(ws, row, 2, "STATUS BREAKDOWN", bold=True, size=8, fg=C_LABEL_FG, bg=C_WHITE, align="left")
+
+    substats = [
+        ("COMPLETE",     zp["complete"],    C_COMPLETE_BG, C_COMPLETE_FG),
+        ("IN PROGRESS",  zp["progress"],    C_WARN_BG,     C_WARN_FG),
+        ("DISCREPANCY",  zp["discrepancy"], C_SETUP_BG,    C_SETUP_FG),
+        ("INCOMPLETE",   zp["incomplete"],  C_NEUTRAL_BG,  C_NEUTRAL_FG),
+    ]
+    for i, (label, value, bg, fg) in enumerate(substats):
+        c = [2, 4, 6, 8][i]
+        _merge(ws, row + 1, c, row + 1, c + 1)
+        _merge(ws, row + 2, c, row + 2, c + 1)
+        _fill(ws, row + 1, c, row + 2, c + 1, bg)
+        _write(ws, row + 1, c, label, bold=True, size=7,  fg=fg, bg=bg, align="center")
+        _write(ws, row + 2, c, value, bold=True, size=14, fg=fg, bg=bg, align="center")
+        _border_box(ws, row + 1, c, row + 2, c + 1)
+    row += 4
+
+    return _draw_spacer(ws, row, 8)
+
+
 # ── Public entry points ───────────────────────────────────────
 
 def _get_caller_wb():
@@ -610,6 +797,30 @@ def _build(wb):
     else:
         _write(ws, row, 2, "⚠  Common Area sheet not found.", fg=C_SETUP_FG)
         row += 2
+
+    row = _draw_spacer(ws, row, 12)
+
+    # Zoom User Recon block
+    zu = _read_zu_data(wb)
+    if zu:
+        row = _draw_zu_section(ws, row, zu)
+    else:
+        _write(ws, row, 2, "⚠  Zoom User Recon — no data found (run audit first).",
+               fg=C_NEUTRAL_FG, italic=True)
+        row += 2
+        row = _draw_spacer(ws, row, 8)
+
+    row = _draw_spacer(ws, row, 12)
+
+    # Zoom Phone User Recon block
+    zp = _read_zp_data(wb)
+    if zp:
+        row = _draw_zp_section(ws, row, zp)
+    else:
+        _write(ws, row, 2, "⚠  ZP User Recon — no data found (run reconciliation first).",
+               fg=C_NEUTRAL_FG, italic=True)
+        row += 2
+        row = _draw_spacer(ws, row, 8)
 
     row = _draw_spacer(ws, row, 20)
 

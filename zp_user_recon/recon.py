@@ -67,8 +67,20 @@ STATUS_INCOMPLETE = "Setup Incomplete"
 
 BRAND_WORKPLACE_APP = "workplace app"
 
-COLOR_GOOD   = (198, 239, 206)   # green
-COLOR_CHANGE = (255, 235, 156)   # yellow
+# Actual (non-temp) phone columns on the sheet
+H_PHONE    = "Phone Number"
+H_OUTBOUND = "Outbound Caller ID"
+
+CHANGES_HDR    = "ZP Changes"
+DASH_LABEL     = "ZP Recon Last Update:"
+MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
+
+_STATUS_COLORS = {
+    STATUS_COMPLETE:   (198, 239, 206),   # green
+    STATUS_PROGRESS:   (255, 235, 156),   # yellow
+    STATUS_DISCREP:    (255, 199, 206),   # red/pink
+    STATUS_INCOMPLETE: (252, 228, 214),   # light orange
+}
 
 import tempfile as _tempfile, os as _os
 LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zp_user_recon.log")
@@ -228,6 +240,79 @@ def _log(msg):
         pass
 
 
+# ── Sheet write helper ────────────────────────────────────────────────────────
+
+def _write(ws, excel_row, headers, col_name, value):
+    """Write value to a named column — skips silently if column not on sheet."""
+    if col_name in headers:
+        col_idx = headers.index(col_name) + 1
+        try:
+            ws.range((excel_row, col_idx)).value = value
+        except Exception as e:
+            _log(f"Write failed row={excel_row} col={col_name}: {e}")
+
+
+# ── Color helpers ─────────────────────────────────────────────────────────────
+
+def _apply_colors(ws, df, headers):
+    """Color-code the ZP User Status column."""
+    if H_STATUS not in headers:
+        return
+    col_idx = headers.index(H_STATUS) + 1
+    for excel_row, row in df.iterrows():
+        val = str(row.get(H_STATUS, "") or "").strip()
+        cell = ws.range((excel_row, col_idx))
+        cell.color = _STATUS_COLORS.get(val, None)
+
+
+def _highlight_mismatches(ws, excel_row, headers, mismatch_cols, compare_cols):
+    """Highlight mismatched cells orange; only clear our orange on now-matching cells."""
+    for col_name in compare_cols:
+        if col_name not in headers:
+            continue
+        col_idx = headers.index(col_name) + 1
+        cell = ws.range((excel_row, col_idx))
+        if col_name in mismatch_cols:
+            cell.color = MISMATCH_COLOR
+        elif cell.color == MISMATCH_COLOR:
+            cell.color = None   # only remove our color, not user highlights
+
+
+def _clear_mismatch_highlights(ws, df, headers, compare_cols):
+    """Remove only our orange mismatch highlights — leave other cell colors untouched."""
+    for col_name in compare_cols:
+        if col_name not in headers:
+            continue
+        col_idx = headers.index(col_name) + 1
+        for excel_row in df.index:
+            cell = ws.range((excel_row, col_idx))
+            if cell.color == MISMATCH_COLOR:
+                cell.color = None
+
+
+# ── Dashboard stamp ───────────────────────────────────────────────────────────
+
+def _stamp_dashboard(wb):
+    """Write last-run timestamp to the Dashboard sheet next to DASH_LABEL."""
+    try:
+        dash = wb.sheets["Dashboard"]
+    except Exception:
+        return
+    now_str = datetime.now().strftime("%m-%d-%Y %H:%M")
+    data = dash.used_range.value or []
+    for r_idx, row in enumerate(data):
+        if not row:
+            continue
+        for c_idx, cell in enumerate(row):
+            if cell and str(cell).strip() == DASH_LABEL:
+                dash.range((r_idx + 1, c_idx + 2)).value = now_str
+                return
+    try:
+        dash.range("J20").value = now_str
+    except Exception:
+        pass
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_zp_reconciliation():
@@ -316,6 +401,26 @@ def run_zp_reconciliation():
     csv_col_map[C_SITE_CODE] = csv_cols_lower.get(C_SITE_CODE.lower(), "")
     csv_col_map[C_SITE_NAME] = csv_cols_lower.get(C_SITE_NAME.lower(), "")
 
+    # ── Ask which phone columns to compare against ────────────────────────────
+    phone_source = dlg.ask_phone_source()
+    if phone_source is None:
+        dlg.info("Cancelled", "No changes were made.")
+        return
+    use_temp      = phone_source == "temp"
+    phone_sh_col  = H_PHONE_TEMP if use_temp else H_PHONE
+    outbound_sh_col = H_OUTBOUND_TEMP if use_temp else H_OUTBOUND
+    _log(f"phone_source={phone_source}  phone_col={phone_sh_col}")
+
+    compare_cols = [
+        H_PACKAGE,
+        H_EXT,
+        phone_sh_col,
+        outbound_sh_col,
+        H_DP1_BRAND,
+        H_DP1_MODEL,
+        H_DP1_MAC,
+    ]
+
     # ── Build email → CSV row lookup ─────────────────────────────────────────
     def _csv_col(name):
         return csv_col_map.get(name, "")
@@ -328,54 +433,92 @@ def run_zp_reconciliation():
 
     _log(f"CSV lookup size: {len(lookup)}")
 
+    # Clear previous mismatch highlights before processing
+    _clear_mismatch_highlights(ws, df, headers, compare_cols)
+
     # ── Process each DGW row ──────────────────────────────────────────────────
     cnt = dict(complete=0, progress=0, discrep=0, incomplete=0)
+    total_rows = len(df)
 
-    for excel_row, row in df.iterrows():
-        em = _norm_email(str(row.iloc[d[H_EMAIL] - 1]))
-        if not em:
-            continue
+    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...")
 
-        if em not in lookup:
-            ws.range((excel_row, d[H_STATUS])).value = STATUS_INCOMPLETE
-            cnt["incomplete"] += 1
-            continue
+    try:
+        for i, (excel_row, row) in enumerate(df.iterrows()):
+            if i % 5 == 0:
+                prog.update(f"Reconciling {i + 1} of {total_rows} rows...")
 
-        cr = lookup[em]
+            em = _norm_email(str(row.iloc[d[H_EMAIL] - 1]))
+            if not em:
+                continue
 
-        def sheet_val(hdr):
-            col = d.get(hdr, 0)
-            return row.iloc[col - 1] if col else ""
+            if em not in lookup:
+                ws.range((excel_row, d[H_STATUS])).value = STATUS_INCOMPLETE
+                _write(ws, excel_row, headers, CHANGES_HDR, "")
+                _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
+                cnt["incomplete"] += 1
+                continue
 
-        def csv_val(col_name):
-            col = _csv_col(col_name)
-            return cr.get(col, "") if col else ""
+            cr = lookup[em]
 
-        pkg_match   = _text_equal(sheet_val(H_PACKAGE), csv_val(C_PACKAGE))
-        ext_match   = _ext_equal(sheet_val(H_EXT), csv_val(C_EXT))
-        phone_match = _phone_equal_na_ok(sheet_val(H_PHONE_TEMP), csv_val(C_PHONE))
-        out_match   = _phone_equal_na_ok(sheet_val(H_OUTBOUND_TEMP), csv_val(C_OUTBOUND))
+            def sheet_val(hdr):
+                col = d.get(hdr, 0)
+                return row.iloc[col - 1] if col else ""
 
-        dev_match, dev_discrep = _device_compare(
-            sheet_val(H_DP1_BRAND), sheet_val(H_DP1_MODEL),
-            sheet_val(H_DP1_MAC),   sheet_val(H_DP1_PROV),
-            csv_val(C_DP1_BRAND),   csv_val(C_DP1_MODEL),
-            csv_val(C_DP1_MAC),     csv_val(C_DP1_PROV),
-        )
+            def csv_val(col_name):
+                col = _csv_col(col_name)
+                return cr.get(col, "") if col else ""
 
-        all_match = pkg_match and ext_match and phone_match and out_match and dev_match
+            pkg_match   = _text_equal(sheet_val(H_PACKAGE), csv_val(C_PACKAGE))
+            ext_match   = _ext_equal(sheet_val(H_EXT), csv_val(C_EXT))
+            phone_match = _phone_equal_na_ok(sheet_val(phone_sh_col), csv_val(C_PHONE))
+            out_match   = _phone_equal_na_ok(sheet_val(outbound_sh_col), csv_val(C_OUTBOUND))
 
-        if all_match:
-            ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
-            cnt["complete"] += 1
-        elif dev_discrep:
-            ws.range((excel_row, d[H_STATUS])).value = STATUS_DISCREP
-            cnt["discrep"] += 1
-        else:
-            ws.range((excel_row, d[H_STATUS])).value = STATUS_PROGRESS
-            cnt["progress"] += 1
+            dev_match, dev_discrep = _device_compare(
+                sheet_val(H_DP1_BRAND), sheet_val(H_DP1_MODEL),
+                sheet_val(H_DP1_MAC),   sheet_val(H_DP1_PROV),
+                csv_val(C_DP1_BRAND),   csv_val(C_DP1_MODEL),
+                csv_val(C_DP1_MAC),     csv_val(C_DP1_PROV),
+            )
+
+            all_match = pkg_match and ext_match and phone_match and out_match and dev_match
+
+            mismatches = set()
+            if not pkg_match:   mismatches.add(H_PACKAGE)
+            if not ext_match:   mismatches.add(H_EXT)
+            if not phone_match: mismatches.add(phone_sh_col)
+            if not out_match:   mismatches.add(outbound_sh_col)
+            if not dev_match:   mismatches.add(H_DP1_BRAND)
+            if dev_discrep:     mismatches.add(H_DP1_MAC)
+
+            if all_match:
+                ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
+                _write(ws, excel_row, headers, CHANGES_HDR, "")
+                _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
+                cnt["complete"] += 1
+            elif dev_discrep:
+                ws.range((excel_row, d[H_STATUS])).value = STATUS_DISCREP
+                _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
+                _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
+                cnt["discrep"] += 1
+            else:
+                ws.range((excel_row, d[H_STATUS])).value = STATUS_PROGRESS
+                _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
+                _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
+                cnt["progress"] += 1
+
+    except Exception as _loop_err:
+        import traceback as _tb
+        _log(f"Loop error: {_loop_err}\n{_tb.format_exc()}")
+        prog.close()
+        dlg.info("Reconciliation Error", str(_loop_err))
+        return
 
     _log(f"Counts: {cnt}")
+
+    prog.update("Applying status colors...")
+    _apply_colors(ws, _read_df(ws), headers)
+    _stamp_dashboard(wb)
+    prog.close()
 
     # ── Summary ───────────────────────────────────────────────────────────────
     dlg.info("Zoom Phone Reconciliation",
