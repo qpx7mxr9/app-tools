@@ -91,6 +91,15 @@ def _get_wb():
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
+def _norm_phone(val):
+    """Strip everything except digits for phone number comparison."""
+    digits = "".join(c for c in str(val or "") if c.isdigit())
+    # Drop leading country code 1 if 11 digits (e.g. 16463475011 → 6463475011)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits
+
+
 def strip_unwanted_packages(val):
     if not val:
         return ""
@@ -341,11 +350,11 @@ def _run_with_csv(wb):
                 disp = sv(row, "Display Name") == cv(cr, "Display Name")
                 site = sv(row, "Site Name")    == cv(cr, "Site Name")
 
-                # Phone / OCID: compare chosen sheet columns vs CSV actual columns
-                s_ph = sv(row, phone_sheet_col)
-                s_oc = sv(row, ocid_sheet_col)
-                c_ph = cv(cr, "Phone Number")
-                c_oc = cv(cr, "Outbound Caller ID")
+                # Phone / OCID: normalize to digits only before comparing
+                s_ph = _norm_phone(row.get(phone_sheet_col, ""))
+                s_oc = _norm_phone(row.get(ocid_sheet_col, ""))
+                c_ph = _norm_phone(cr.get("Phone Number", ""))
+                c_oc = _norm_phone(cr.get("Outbound Caller ID", ""))
                 phone = (not s_ph and not c_ph) or (s_ph == c_ph)
                 ocid  = (not s_oc and not c_oc) or (s_oc == c_oc)
 
