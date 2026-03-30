@@ -108,7 +108,21 @@ def _read_df(ws):
 def _write(ws, excel_row, headers, col_name, value):
     """Write value to cell — uses tuple syntax for Mac compatibility."""
     if col_name in headers:
-        ws.range((excel_row, headers.index(col_name) + 1)).value = value
+        col_idx = headers.index(col_name) + 1
+        try:
+            ws.range((excel_row, col_idx)).value = value
+        except Exception as e:
+            _log(f"Write failed row={excel_row} col={col_name}({col_idx}): {e}")
+
+
+LOG_PATH = "/tmp/zca_recon.log"
+
+def _log(msg):
+    try:
+        with open(LOG_PATH, "a") as f:
+            f.write(f"{datetime.now().strftime('%H:%M:%S')}  {msg}\n")
+    except Exception:
+        pass
 
 
 def _color_status(ws, df):
@@ -151,7 +165,9 @@ def _stamp_dashboard(wb):
 # ── Public entry points ───────────────────────────────────────────────────────
 
 def run_reconciliation():
+    import os; open(LOG_PATH, "w").close()  # clear log
     wb = _get_wb()
+    _log(f"wb={wb.name if wb else 'None'}")
     if not wb:
         dlg.info("Error", "Could not find open workbook."); return
     action = dlg.show_intro()
@@ -212,6 +228,7 @@ def _run_with_csv(wb):
 
     today = datetime.now().strftime("%m-%d-%Y %H:%M")
     cnt = dict(complete=0, disc=0, progress=0, incomplete=0)
+    _log(f"Sheet rows={len(df)}  CSV rows={len(df_csv)}  Headers={headers[:5]}...")
 
     def sv(row, col):
         v = row.get(col, "") if col in row.index else ""
@@ -264,6 +281,7 @@ def _run_with_csv(wb):
         _write(ws, excel_row, headers, STATUS_HDR, status)
         _write(ws, excel_row, headers, DATE_HDR,   today)
 
+    _log(f"Counts: {cnt}")
     _color_status(ws, _read_df(ws))
     _stamp_dashboard(wb)
 
