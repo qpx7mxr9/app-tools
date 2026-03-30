@@ -22,6 +22,9 @@ def pick_csv(title="Select Source Export CSV"):
 
 def get_save_path(suggested, title="Save CSV"):
     root = _root()
+    root.deiconify()
+    _center(root, 1, 1)   # force root to center so dialog inherits position
+    root.update()
     path = filedialog.asksaveasfilename(
         parent=root, title=title, initialfile=suggested,
         defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
@@ -41,17 +44,18 @@ def show_intro():
     root.deiconify()
     root.title("CA Reconciliation")
     root.resizable(False, False)
-    _center(root, 480, 320)
+    _center(root, 420, 280)
 
     # Header
-    header = tk.Frame(root, bg="#1F2D4E", height=56)
+    header = tk.Frame(root, bg="#1F2D4E", height=50)
     header.pack(fill="x")
+    header.pack_propagate(False)
     tk.Label(header, text="COMMON AREA RECONCILIATION",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 13, "bold")).pack(side="left", padx=20, pady=14)
+             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, pady=0, anchor="center")
 
     # Body
-    body = tk.Frame(root, bg="white", padx=24, pady=16)
+    body = tk.Frame(root, bg="white", padx=20, pady=14)
     body.pack(fill="both", expand=True)
 
     tk.Label(body, text="What you will need:",
@@ -61,7 +65,7 @@ def show_intro():
              text="  •  Source export CSV\n"
                   "     (Admin Portal › Phone › Common Area Phones › Export)",
              bg="white", font=("Segoe UI", 9), fg="#555",
-             justify="left").pack(anchor="w", pady=(2, 12))
+             justify="left").pack(anchor="w", pady=(2, 10))
 
     tk.Label(body, text="After reconciling you can export:",
              bg="white", font=("Segoe UI", 10, "bold"),
@@ -73,7 +77,7 @@ def show_intro():
              justify="left").pack(anchor="w", pady=(2, 0))
 
     # Buttons
-    btn_frame = tk.Frame(root, bg="#F4F4F4", padx=16, pady=12)
+    btn_frame = tk.Frame(root, bg="#F0F0F0", padx=14, pady=10)
     btn_frame.pack(fill="x")
 
     def on_import():
@@ -88,16 +92,16 @@ def show_intro():
         root.destroy()
 
     tk.Button(btn_frame, text="Cancel",
-              bg="#E0E0E0", fg="#333",
-              font=("Segoe UI", 9), width=10, relief="flat",
+              bg="#D8D8D8", fg="#333",
+              font=("Segoe UI", 10), width=10, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Skip Import →",
               bg="#607D9F", fg="white",
-              font=("Segoe UI", 9), width=14, relief="flat",
+              font=("Segoe UI", 10), width=13, relief="flat", cursor="hand2",
               command=on_skip).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Import CSV →",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 9, "bold"), width=14, relief="flat",
+              font=("Segoe UI", 10, "bold"), width=13, relief="flat", cursor="hand2",
               command=on_import).pack(side="right", padx=(4, 0))
 
     root.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -119,17 +123,18 @@ def show_results(counts):
     root.deiconify()
     root.title("Reconciliation Complete")
     root.resizable(False, False)
-    _center(root, 460, 360)
+    _center(root, 400, 320)
 
     # Header
-    header = tk.Frame(root, bg="#1F2D4E", height=50)
+    header = tk.Frame(root, bg="#1F2D4E", height=48)
     header.pack(fill="x")
+    header.pack_propagate(False)
     tk.Label(header, text="RECONCILIATION COMPLETE",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 12, "bold")).pack(side="left", padx=20, pady=12)
+             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, anchor="center")
 
     # Stats
-    stats_frame = tk.Frame(root, bg="white", padx=24, pady=16)
+    stats_frame = tk.Frame(root, bg="white", padx=20, pady=14)
     stats_frame.pack(fill="x")
 
     stat_items = [
@@ -150,15 +155,15 @@ def show_results(counts):
                  width=6, relief="flat").pack(side="left")
 
     # Divider
-    tk.Frame(root, bg="#E0E0E0", height=1).pack(fill="x", padx=24)
+    tk.Frame(root, bg="#E0E0E0", height=1).pack(fill="x", padx=20)
 
     # Export options
-    export_frame = tk.Frame(root, bg="white", padx=24, pady=14)
+    export_frame = tk.Frame(root, bg="white", padx=20, pady=12)
     export_frame.pack(fill="x")
 
-    tk.Label(export_frame, text="Export:",
+    tk.Label(export_frame, text="Select exports:",
              bg="white", font=("Segoe UI", 10, "bold"),
-             fg="#333").pack(anchor="w", pady=(0, 8))
+             fg="#333").pack(anchor="w", pady=(0, 6))
 
     var_update = tk.BooleanVar(value=counts.get("disc", 0) > 0 or counts.get("progress", 0) > 0)
     var_add    = tk.BooleanVar(value=counts.get("incomplete", 0) > 0)
@@ -166,16 +171,16 @@ def show_results(counts):
     tk.Checkbutton(export_frame,
                    text="UPDATE file  (Discrepancy / In Progress)",
                    variable=var_update,
-                   bg="white", font=("Segoe UI", 9), fg="#333",
+                   bg="white", font=("Segoe UI", 10), fg="#333",
                    activebackground="white").pack(anchor="w")
     tk.Checkbutton(export_frame,
                    text="ADD file  (Not in source system yet)",
                    variable=var_add,
-                   bg="white", font=("Segoe UI", 9), fg="#333",
+                   bg="white", font=("Segoe UI", 10), fg="#333",
                    activebackground="white").pack(anchor="w", pady=(4, 0))
 
     # Buttons
-    btn_frame = tk.Frame(root, bg="#F4F4F4", padx=16, pady=12)
+    btn_frame = tk.Frame(root, bg="#F0F0F0", padx=14, pady=10)
     btn_frame.pack(fill="x")
 
     def on_done():
@@ -188,12 +193,12 @@ def show_results(counts):
         root.destroy()
 
     tk.Button(btn_frame, text="Skip Exports",
-              bg="#E0E0E0", fg="#333",
-              font=("Segoe UI", 9), width=12, relief="flat",
+              bg="#D8D8D8", fg="#333",
+              font=("Segoe UI", 10), width=12, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Export Selected →",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 9, "bold"), width=16, relief="flat",
+              font=("Segoe UI", 10, "bold"), width=16, relief="flat", cursor="hand2",
               command=on_done).pack(side="right", padx=(4, 0))
 
     root.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -214,15 +219,16 @@ def ask_phone_source():
     root.deiconify()
     root.title("Phone Number Source")
     root.resizable(False, False)
-    _center(root, 380, 200)
+    _center(root, 340, 180)
 
-    header = tk.Frame(root, bg="#1F2D4E", height=44)
+    header = tk.Frame(root, bg="#1F2D4E", height=42)
     header.pack(fill="x")
+    header.pack_propagate(False)
     tk.Label(header, text="SELECT PHONE NUMBER SOURCE",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 10, "bold")).pack(side="left", padx=16, pady=10)
+             font=("Segoe UI", 10, "bold")).pack(side="left", padx=16, anchor="center")
 
-    body = tk.Frame(root, bg="white", padx=24, pady=16)
+    body = tk.Frame(root, bg="white", padx=22, pady=14)
     body.pack(fill="both", expand=True)
 
     var = tk.StringVar(value="temp")
@@ -233,7 +239,7 @@ def ask_phone_source():
                    variable=var, value="actual",
                    bg="white", font=("Segoe UI", 10)).pack(anchor="w", pady=(6, 0))
 
-    btn_frame = tk.Frame(root, bg="#F4F4F4", padx=16, pady=10)
+    btn_frame = tk.Frame(root, bg="#F0F0F0", padx=14, pady=10)
     btn_frame.pack(fill="x")
 
     def on_ok():
@@ -244,12 +250,12 @@ def ask_phone_source():
         root.destroy()
 
     tk.Button(btn_frame, text="Cancel",
-              bg="#E0E0E0", fg="#333",
-              font=("Segoe UI", 9), width=10, relief="flat",
+              bg="#D8D8D8", fg="#333",
+              font=("Segoe UI", 10), width=10, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Continue →",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 9, "bold"), width=12, relief="flat",
+              font=("Segoe UI", 10, "bold"), width=12, relief="flat", cursor="hand2",
               command=on_ok).pack(side="right", padx=(4, 0))
 
     root.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -262,6 +268,9 @@ def ask_phone_source():
 def info(title, message):
     from tkinter import messagebox
     root = _root()
+    root.deiconify()
+    _center(root, 1, 1)
+    root.update()
     messagebox.showinfo(title, message, parent=root)
     root.destroy()
 
