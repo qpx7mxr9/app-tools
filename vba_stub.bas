@@ -38,4 +38,16 @@ Sub ZCA_ExportAdd()
     RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.export_add()"
 End Sub
 
-' ── Add stubs for new tools below as they are built ──────
+' ── Zoom User Recon ──────────────────────────────────────
+Sub ZUR_RunAudit()
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
+End Sub
+
+Sub ZUR_ClearResults()
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
+End Sub
+
+' ── ZP User Recon ─────────────────────────────────────────
+Sub ZPU_RunReconciliation()
+    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
+End Sub

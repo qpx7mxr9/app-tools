@@ -262,60 +262,68 @@ def _run_with_csv(wb):
     sample_keys = list(lookup.index[:5])
     _log(f"CSV sample keys: {sample_keys}")
 
-    for i, (excel_row, row) in enumerate(df.iterrows()):
-        if i % 5 == 0:
-            prog.update(f"Reconciling {i + 1} of {total_rows} rows...")
-        raw_ext = row.get(EXT_HDR, "")
-        ext_val = _norm_ext(raw_ext)
-        if not ext_val:
-            continue
+    try:
+        for i, (excel_row, row) in enumerate(df.iterrows()):
+            if i % 5 == 0:
+                prog.update(f"Reconciling {i + 1} of {total_rows} rows...")
+            raw_ext = row.get(EXT_HDR, "")
+            ext_val = _norm_ext(raw_ext)
+            if not ext_val:
+                continue
 
-        key = ext_val
+            key = ext_val
 
-        if key in lookup.index:
-            cr = lookup.loc[key]
+            if key in lookup.index:
+                cr = lookup.loc[key]
 
-            if PKG_HDR in headers and "Package" in cr.index:
-                _write(ws, excel_row, headers, PKG_HDR,
-                       strip_unwanted_packages(cr.get("Package", "")))
+                if PKG_HDR in headers and "Package" in cr.index:
+                    _write(ws, excel_row, headers, PKG_HDR,
+                           strip_unwanted_packages(cr.get("Package", "")))
 
-            _write(ws, excel_row, headers, DATASRC_HDR, "Source CSV")
+                _write(ws, excel_row, headers, DATASRC_HDR, "Source CSV")
 
-            # Compare identifying fields (sheet vs CSV)
-            disp = sv(row, "Display Name") == cv(cr, "Display Name")
-            site = sv(row, "Site Name")    == cv(cr, "Site Name")
+                # Compare identifying fields (sheet vs CSV)
+                disp = sv(row, "Display Name") == cv(cr, "Display Name")
+                site = sv(row, "Site Name")    == cv(cr, "Site Name")
 
-            # Phone / OCID: compare actual columns; treat both-empty as matching
-            s_ph, c_ph   = sv(row, "Phone Number"),       cv(cr, "Phone Number")
-            s_oc, c_oc   = sv(row, "Outbound Caller ID"), cv(cr, "Outbound Caller ID")
-            phone = (not s_ph and not c_ph) or (s_ph == c_ph)
-            ocid  = (not s_oc and not c_oc) or (s_oc == c_oc)
+                # Phone / OCID: compare actual columns; treat both-empty as matching
+                s_ph, c_ph   = sv(row, "Phone Number"),       cv(cr, "Phone Number")
+                s_oc, c_oc   = sv(row, "Outbound Caller ID"), cv(cr, "Outbound Caller ID")
+                phone = (not s_ph and not c_ph) or (s_ph == c_ph)
+                ocid  = (not s_oc and not c_oc) or (s_oc == c_oc)
 
-            dp = sv(row, f"Desk Phone 1{AP}s Brand") == cv(cr, f"Desk Phone 1{AP}s Brand")
+                dp = sv(row, f"Desk Phone 1{AP}s Brand") == cv(cr, f"Desk Phone 1{AP}s Brand")
 
-            if disp and site and phone and ocid and dp:
-                # All key fields match
-                status = "Complete"
-                _write(ws, excel_row, headers, DATAST_HDR, "Verified")
-                cnt["complete"] += 1
-            elif disp and site:
-                # Name + site match; phone / desk phone details differ
-                status = "In Progress"
-                _write(ws, excel_row, headers, DATAST_HDR, "Partial")
-                cnt["progress"] += 1
+                if disp and site and phone and ocid and dp:
+                    # All key fields match
+                    status = "Complete"
+                    _write(ws, excel_row, headers, DATAST_HDR, "Verified")
+                    cnt["complete"] += 1
+                elif disp and site:
+                    # Name + site match; phone / desk phone details differ
+                    status = "In Progress"
+                    _write(ws, excel_row, headers, DATAST_HDR, "Partial")
+                    cnt["progress"] += 1
+                else:
+                    # Display name or site doesn't match
+                    status = "Discrepancy"
+                    _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
+                    cnt["disc"] += 1
             else:
-                # Display name or site doesn't match
-                status = "Discrepancy"
-                _write(ws, excel_row, headers, DATAST_HDR, "Discrepancy")
-                cnt["disc"] += 1
-        else:
-            status = "Not Found in CSV"
-            _write(ws, excel_row, headers, DATASRC_HDR, "Sheet Only")
-            _write(ws, excel_row, headers, DATAST_HDR,  "Not Found in CSV")
-            cnt["incomplete"] += 1
+                status = "Not Found in CSV"
+                _write(ws, excel_row, headers, DATASRC_HDR, "Sheet Only")
+                _write(ws, excel_row, headers, DATAST_HDR,  "Not Found in CSV")
+                cnt["incomplete"] += 1
 
-        _write(ws, excel_row, headers, STATUS_HDR, status)
-        _write(ws, excel_row, headers, DATE_HDR,   today)
+            _write(ws, excel_row, headers, STATUS_HDR, status)
+            _write(ws, excel_row, headers, DATE_HDR,   today)
+
+    except Exception as _loop_err:
+        import traceback as _tb
+        _log(f"Loop error at row {i}: {_loop_err}\n{_tb.format_exc()}")
+        prog.close()
+        dlg.info("Reconciliation Error", str(_loop_err))
+        return
 
     prog.update("Applying status colors...")
     _log(f"Counts: {cnt}")

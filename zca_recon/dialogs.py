@@ -74,6 +74,21 @@ def _focus_python():
 
 # ── File pickers ──────────────────────────────────────────────
 
+def pick_file_any(title="Select File"):
+    """Open a file picker that accepts CSV and Excel files."""
+    import sys
+    if sys.platform == "darwin":
+        return _macos_open_dialog(title, ["csv", "xlsx", "xls", "xlsm"])
+    root = _get_root()
+    path = filedialog.askopenfilename(
+        parent=root, title=title,
+        filetypes=[("Excel & CSV", "*.xlsx *.xls *.xlsm *.csv"),
+                   ("CSV Files", "*.csv"),
+                   ("Excel Files", "*.xlsx *.xls *.xlsm"),
+                   ("All Files", "*.*")])
+    return path or ""
+
+
 def pick_csv(title="Select Source Export CSV"):
     """Open a CSV file picker. Uses osascript on macOS for reliable focus."""
     import sys
@@ -152,8 +167,9 @@ def _macos_save_dialog(title, default_name):
 class ProgressWindow:
     """
     Small non-closeable status window for long-running operations.
-    Call update(msg) mid-loop — uses win.update() so it repaints
-    without threading.  Works on both Mac and Windows.
+    Call update(msg) mid-loop — uses update_idletasks() to repaint
+    without processing user events (safe against Tk reentrancy).
+    Works on both Mac and Windows.
     """
     def __init__(self, message="Working..."):
         root = _get_root()
@@ -175,12 +191,12 @@ class ProgressWindow:
             font=("Segoe UI", 10))
         self._label.pack()
         self._win = win
-        win.update()
+        win.update_idletasks()
 
     def update(self, message):
         try:
             self._label.config(text=message)
-            self._win.update()
+            self._win.update_idletasks()
         except Exception:
             pass
 
@@ -441,6 +457,38 @@ def ask_phone_source():
     win.focus_force()
     root.wait_window(win)
     return result["choice"]
+
+
+# ── Yes/No dialog ────────────────────────────────────────────
+
+def ask_yes_no(title, message):
+    """
+    Blocking Yes/No dialog.
+    Returns True if user clicked Yes, False otherwise.
+    """
+    import sys
+    if sys.platform == "darwin":
+        import subprocess
+        # Embed message with newlines replaced by AppleScript return literal
+        lines = str(message).split("\n")
+        as_parts = " & return & ".join(f'"{l.replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34))}"' for l in lines)
+        ttl = title.replace("\\", "\\\\").replace('"', '\\"')
+        script = (
+            f'tell application "System Events" to activate\n'
+            f'set r to button returned of (display dialog {as_parts} with title "{ttl}" '
+            f'buttons {{"No", "Yes"}} default button "Yes")\n'
+            f'return r'
+        )
+        try:
+            r = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=120)
+            return r.stdout.strip() == "Yes"
+        except Exception:
+            return False
+    from tkinter import messagebox
+    root = _get_root()
+    return messagebox.askyesno(title, message, parent=root)
 
 
 # ── Messages ─────────────────────────────────────────────────
