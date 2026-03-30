@@ -400,15 +400,26 @@ def _export(wb, export_type):
     if filtered.empty:
         dlg.info("Nothing to Export", "No matching rows found for this export type."); return
 
+    def _cell(row, col_name):
+        """Return cell value as a clean string; blank for None/NaN."""
+        if col_name not in headers:
+            return ""
+        raw = row.get(col_name, "")
+        try:
+            if pd.isna(raw):
+                return ""
+        except TypeError:
+            pass
+        return str(raw).strip()
+
     out_rows = []
     for _, row in filtered.iterrows():
         out_row = {}
         for export_hdr, src_hdr in cols:
-            val = ""
-            if src_hdr and src_hdr in headers:
-                val = str(row.get(src_hdr, "")).strip()
-            if export_hdr == "Package" and not val and "Package" in headers:
-                val = str(row.get("Package", "")).strip()
+            val = _cell(row, src_hdr) if src_hdr else ""
+            # Package: prefer Common Area Package, fall back to column-B "Package"
+            if export_hdr == "Package" and not val:
+                val = _cell(row, "Package")
             if export_hdr == "Package":
                 val = strip_unwanted_packages(val)
             out_row[export_hdr] = val
