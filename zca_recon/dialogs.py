@@ -81,39 +81,77 @@ def _focus_python():
 
 # ── File pickers ──────────────────────────────────────────────
 
-def _center_root_for_dialog():
-    """
-    Briefly show the root at screen center before opening a native file dialog.
-    macOS positions native dialogs relative to the parent window's location,
-    so the parent must be visible and centered.
-    """
-    root = _get_root()
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
-    root.geometry(f"1x1+{sw // 2}+{sh // 2}")
-    root.deiconify()
-    root.update()
-    return root
-
-
 def pick_csv(title="Select Source Export CSV"):
-    root = _center_root_for_dialog()
-    _focus_python()
+    """Open a CSV file picker. Uses osascript on macOS for reliable focus."""
+    import sys
+    if sys.platform == "darwin":
+        return _macos_open_dialog(title, ["csv"])
+    root = _get_root()
     path = filedialog.askopenfilename(
         parent=root, title=title,
         filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")])
-    root.withdraw()
     return path or ""
 
 
 def get_save_path(suggested, title="Save CSV"):
-    root = _center_root_for_dialog()
-    _focus_python()
+    """Open a save-file dialog. Uses osascript on macOS for reliable focus."""
+    import sys
+    if sys.platform == "darwin":
+        return _macos_save_dialog(title, suggested)
+    root = _get_root()
     path = filedialog.asksaveasfilename(
         parent=root, title=title, initialfile=suggested,
         defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
-    root.withdraw()
     return path or ""
+
+
+def _macos_open_dialog(title, file_types=None):
+    """
+    Use AppleScript 'choose file' on macOS.
+    Always appears on top — no Tk focus required.
+    """
+    import subprocess
+    type_clause = ""
+    if file_types:
+        quoted = ", ".join(f'"{t}"' for t in file_types)
+        type_clause = f" of type {{{quoted}}}"
+    script = (
+        f'tell application "System Events" to activate\n'
+        f'set f to choose file with prompt "{title}"{type_clause}\n'
+        f'return POSIX path of f'
+    )
+    try:
+        r = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=300)
+        return r.stdout.strip() or ""
+    except Exception:
+        return ""
+
+
+def _macos_save_dialog(title, default_name):
+    """
+    Use AppleScript 'choose file name' on macOS.
+    Always appears on top — no Tk focus required.
+    """
+    import subprocess
+    # Default folder: Desktop
+    script = (
+        f'tell application "System Events" to activate\n'
+        f'set f to choose file name with prompt "{title}" '
+        f'default name "{default_name}"\n'
+        f'return POSIX path of f'
+    )
+    try:
+        r = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=300)
+        path = r.stdout.strip()
+        if path and not path.endswith(".csv"):
+            path += ".csv"
+        return path or ""
+    except Exception:
+        return ""
 
 
 # ── Intro dialog ──────────────────────────────────────────────
