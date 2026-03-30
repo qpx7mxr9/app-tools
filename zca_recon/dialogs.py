@@ -20,6 +20,25 @@ from tkinter import filedialog
 _root = None
 
 
+def _silence_fd2():
+    """
+    Redirect fd 2 to /dev/null and return a callable that restores it.
+    Used to suppress macOS Objective-C warnings (e.g. Secure Coding) that
+    write directly to the raw file descriptor, bypassing sys.stderr.
+    """
+    import os, sys
+    if sys.platform != "darwin":
+        return lambda: None
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    saved = os.dup(2)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    def _restore():
+        os.dup2(saved, 2)
+        os.close(saved)
+    return _restore
+
+
 def _get_root():
     """Return (creating if needed) the one hidden root Tk window."""
     global _root
@@ -30,7 +49,13 @@ def _get_root():
         except Exception:
             _root = None
 
-    _root = tk.Tk()
+    # Suppress the macOS "Secure coding" Tk 8.5 warning during NSApp init
+    restore = _silence_fd2()
+    try:
+        _root = tk.Tk()
+    finally:
+        restore()
+
     _root.withdraw()
     try:
         _root.attributes("-topmost", True)
