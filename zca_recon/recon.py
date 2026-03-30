@@ -140,7 +140,7 @@ LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zca_recon.log")
 
 
 def _highlight_mismatches(ws, excel_row, headers, mismatch_cols, compare_cols):
-    """Highlight specific cells orange where the sheet value differs from the CSV."""
+    """Highlight mismatched cells orange; only clear our orange if a field now matches."""
     for col_name in compare_cols:
         if col_name not in headers:
             continue
@@ -148,18 +148,21 @@ def _highlight_mismatches(ws, excel_row, headers, mismatch_cols, compare_cols):
         cell = ws.range((excel_row, col_idx))
         if col_name in mismatch_cols:
             cell.color = MISMATCH_COLOR
-        else:
+        elif cell.color == MISMATCH_COLOR:
+            # Only clear if it's our color — leave any other existing highlights alone
             cell.color = None
 
 
 def _clear_mismatch_highlights(ws, df, headers, compare_cols):
-    """Clear all mismatch highlights from compared columns before a fresh run."""
+    """Remove only our orange mismatch highlights — leave any other cell colors untouched."""
     for col_name in compare_cols:
         if col_name not in headers:
             continue
         col_idx = headers.index(col_name) + 1
         for excel_row in df.index:
-            ws.range((excel_row, col_idx)).color = None
+            cell = ws.range((excel_row, col_idx))
+            if cell.color == MISMATCH_COLOR:
+                cell.color = None
 
 def _log(msg):
     try:
