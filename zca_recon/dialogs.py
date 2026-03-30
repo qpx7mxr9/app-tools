@@ -409,9 +409,46 @@ def ask_phone_source():
     return result["choice"]
 
 
-# ── Simple message ────────────────────────────────────────────
+# ── Messages ─────────────────────────────────────────────────
 
 def info(title, message):
+    """Blocking dialog — use for errors that need acknowledgement."""
+    import sys
+    if sys.platform == "darwin":
+        import subprocess
+        msg = message.replace("\\", "\\\\").replace('"', '\\"')
+        ttl = title.replace('"', '\\"')
+        script = (
+            f'display dialog "{msg}" with title "{ttl}" '
+            f'buttons {{"OK"}} default button "OK"'
+        )
+        try:
+            subprocess.run(["osascript", "-e", script],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=120)
+        except Exception:
+            pass
+        return
+    from tkinter import messagebox
+    root = _get_root()
+    messagebox.showinfo(title, message, parent=root)
+
+
+def notify(title, message):
+    """Non-blocking macOS notification — fires and disappears on its own."""
+    import sys
+    if sys.platform == "darwin":
+        import subprocess
+        msg = message.replace("\\", "\\\\").replace('"', '\\"')
+        ttl = title.replace('"', '\\"')
+        script = f'display notification "{msg}" with title "{ttl}"'
+        try:
+            subprocess.Popen(["osascript", "-e", script],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        return
+    # Windows fallback — just use a messagebox
     from tkinter import messagebox
     root = _get_root()
     messagebox.showinfo(title, message, parent=root)

@@ -245,7 +245,14 @@ def _run_with_csv(wb):
 
     today = datetime.now().strftime("%m-%d-%Y %H:%M")
     cnt = dict(complete=0, disc=0, progress=0, incomplete=0)
-    _log(f"Sheet rows={len(df)}  CSV rows={len(df_csv)}  Headers={headers[:5]}...")
+    total_rows = len(df)
+    _log(f"Sheet rows={total_rows}  CSV rows={len(df_csv)}  Headers={headers[:5]}...")
+
+    def _progress(n):
+        try:
+            wb.app.status_bar = f"CA Recon: row {n} of {total_rows}..."
+        except Exception:
+            pass
 
     def sv(row, col):
         v = row.get(col, "") if col in row.index else ""
@@ -259,7 +266,9 @@ def _run_with_csv(wb):
     sample_keys = list(lookup.index[:5])
     _log(f"CSV sample keys: {sample_keys}")
 
-    for excel_row, row in df.iterrows():
+    for i, (excel_row, row) in enumerate(df.iterrows()):
+        if i % 5 == 0:
+            _progress(i + 1)
         raw_ext = row.get(EXT_HDR, "")
         ext_val = _norm_ext(raw_ext)
         if not ext_val:
@@ -312,6 +321,10 @@ def _run_with_csv(wb):
         _write(ws, excel_row, headers, STATUS_HDR, status)
         _write(ws, excel_row, headers, DATE_HDR,   today)
 
+    try:
+        wb.app.status_bar = False   # restore default Excel status bar
+    except Exception:
+        pass
     _log(f"Counts: {cnt}")
     _color_status(ws, _read_df(ws))
     _stamp_dashboard(wb)
@@ -453,7 +466,7 @@ def _export(wb, export_type):
     try:
         out_df.to_csv(save_path, index=False)
         _log("CSV saved ok")
-        dlg.info("Export Complete", f"{len(out_df)} row(s) exported.\n{save_path}")
+        dlg.notify("Export Complete", f"{len(out_df)} row(s) saved to {save_path}")
     except Exception as e:
         _log(f"CSV save error: {e}")
         dlg.info("Export Error", str(e))
