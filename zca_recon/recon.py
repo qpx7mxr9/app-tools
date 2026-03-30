@@ -171,6 +171,7 @@ def run_reconciliation():
     if not wb:
         dlg.info("Error", "Could not find open workbook."); return
     action = dlg.show_intro()
+    _log(f"action={action}")
     if action is None:
         return
     if action == "import":
@@ -196,7 +197,9 @@ def export_add():
 # ── Reconciliation logic ──────────────────────────────────────────────────────
 
 def _run_with_csv(wb):
+    _log("_run_with_csv start")
     csv_path = dlg.pick_csv()
+    _log(f"csv_path={csv_path}")
     if not csv_path:
         return
 
@@ -293,18 +296,21 @@ def _run_with_csv(wb):
 
 
 def _run_without_csv(wb):
+    _log("_run_without_csv start")
     ws = _get_sheet(wb)
     if ws is None:
-        return
+        _log("sheet not found"); return
 
     df = _read_df(ws)
     headers = list(df.columns)
+    _log(f"rows={len(df)}  STATUS_HDR in headers={STATUS_HDR in headers}")
 
     if STATUS_HDR not in headers:
         dlg.info("Error", f"'{STATUS_HDR}' not found on sheet."); return
 
     statuses = df[STATUS_HDR].dropna().astype(str).str.strip()
     count = (statuses != "").sum()
+    _log(f"existing status count={count}")
 
     if count == 0:
         exports = dlg.show_results({"complete": 0, "disc": 0, "progress": 0, "incomplete": len(df)})
