@@ -165,11 +165,19 @@ def _stamp_dashboard(wb):
 # ── Public entry points ───────────────────────────────────────────────────────
 
 def run_reconciliation():
-    import os; open(LOG_PATH, "w").close()  # clear log
+    import threading, os
+    open(LOG_PATH, "w").close()
     wb = _get_wb()
     _log(f"wb={wb.name if wb else 'None'}")
     if not wb:
         dlg.info("Error", "Could not find open workbook."); return
+    # Run in background thread so xlwings doesn't time out during dialogs
+    t = threading.Thread(target=_run_main, args=(wb,), daemon=True)
+    t.start()
+    t.join()
+
+
+def _run_main(wb):
     action = dlg.show_intro()
     _log(f"action={action}")
     if action is None:
@@ -181,17 +189,23 @@ def run_reconciliation():
 
 
 def export_update():
+    import threading
     wb = _get_wb()
     if not wb:
         dlg.info("Error", "Could not find open workbook."); return
-    _export(wb, "update")
+    t = threading.Thread(target=_export, args=(wb, "update"), daemon=True)
+    t.start()
+    t.join()
 
 
 def export_add():
+    import threading
     wb = _get_wb()
     if not wb:
         dlg.info("Error", "Could not find open workbook."); return
-    _export(wb, "add")
+    t = threading.Thread(target=_export, args=(wb, "add"), daemon=True)
+    t.start()
+    t.join()
 
 
 # ── Reconciliation logic ──────────────────────────────────────────────────────
