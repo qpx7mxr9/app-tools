@@ -25,6 +25,7 @@ DATE_HDR    = "Common Area (Last Update)"
 PKG_HDR     = "Common Area Package"
 DATASRC_HDR = "Data Source"
 DATAST_HDR  = "Data Status"
+CHANGES_HDR = "ZCA Changes"
 DASH_LABEL  = "ZP CA Last Update:"
 AP          = "'"  # apostrophe used in desk phone column headers
 
@@ -41,6 +42,7 @@ MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
 # ── Export column map ─────────────────────────────────────────────────────────
 EXPORT_COLS = [
+    ("Current Extension Number",              "Extension Number"),  # col 0
     ("Display Name",                          "Display Name"),
     ("Package",                               PKG_HDR),
     ("Site Name",                             "Site Name"),
@@ -50,8 +52,8 @@ EXPORT_COLS = [
     ("Department",                            "Department"),
     ("Cost Center",                           "Cost Center"),
     ("Extension Number",                      "Extension Number"),
-    ("Phone Number",                          None),   # resolved at export time
-    ("Outbound Caller ID",                    None),   # resolved at export time
+    ("Phone Number",                          None),   # resolved at export time — index 10
+    ("Outbound Caller ID",                    None),   # resolved at export time — index 11
     ("Select Outbound Caller ID",             "Select Outbound Caller ID"),
     (f"Desk Phone 1{AP}s Brand",              f"Desk Phone 1{AP}s Brand"),
     (f"Desk Phone 1{AP}s Model",              f"Desk Phone 1{AP}s Model"),
@@ -366,7 +368,8 @@ def _run_with_csv(wb):
                 if disp and site and phone and ocid and dp:
                     # All key fields match
                     status = "Complete"
-                    _write(ws, excel_row, headers, DATAST_HDR, "Verified")
+                    _write(ws, excel_row, headers, DATAST_HDR,  "Verified")
+                    _write(ws, excel_row, headers, CHANGES_HDR, "")
                     _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
                     cnt["complete"] += 1
                 elif disp and site:
@@ -377,6 +380,7 @@ def _run_with_csv(wb):
                     if not phone: mismatches.add(phone_sheet_col)
                     if not ocid:  mismatches.add(ocid_sheet_col)
                     if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
+                    _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
                     _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                     cnt["progress"] += 1
                 else:
@@ -389,12 +393,14 @@ def _run_with_csv(wb):
                     if not phone: mismatches.add(phone_sheet_col)
                     if not ocid:  mismatches.add(ocid_sheet_col)
                     if not dp:    mismatches.add(f"Desk Phone 1{AP}s Brand")
+                    _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
                     _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                     cnt["disc"] += 1
             else:
                 status = "Not Found in CSV"
                 _write(ws, excel_row, headers, DATASRC_HDR, "Sheet Only")
                 _write(ws, excel_row, headers, DATAST_HDR,  "Not Found in CSV")
+                _write(ws, excel_row, headers, CHANGES_HDR, "")
                 cnt["incomplete"] += 1
 
             _write(ws, excel_row, headers, STATUS_HDR, status)
@@ -508,8 +514,8 @@ def _export(wb, export_type):
         return
 
     cols = list(EXPORT_COLS)
-    cols[9]  = ("Phone Number",       "Phone Number (Zoom Temp)" if use_temp else "Phone Number")
-    cols[10] = ("Outbound Caller ID", "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID")
+    cols[10] = ("Phone Number",       "Phone Number (Zoom Temp)" if use_temp else "Phone Number")
+    cols[11] = ("Outbound Caller ID", "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID")
 
     s = df[STATUS_HDR].astype(str).str.strip()
 
@@ -546,9 +552,14 @@ def _export(wb, export_type):
             if export_hdr == "Package":
                 val = strip_unwanted_packages(val)
             out_row[export_hdr] = val
+        if export_type == "update":
+            out_row["Changes"] = _cell(row, CHANGES_HDR)
         out_rows.append(out_row)
 
-    out_df = pd.DataFrame(out_rows, columns=[h for h, _ in cols])
+    export_headers = [h for h, _ in cols]
+    if export_type == "update":
+        export_headers = export_headers + ["Changes"]
+    out_df = pd.DataFrame(out_rows, columns=export_headers)
     _log(f"filtered={len(filtered)} out_rows={len(out_df)}")
     try:
         out_df.to_csv(save_path, index=False)
