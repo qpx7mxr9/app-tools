@@ -248,11 +248,7 @@ def _run_with_csv(wb):
     total_rows = len(df)
     _log(f"Sheet rows={total_rows}  CSV rows={len(df_csv)}  Headers={headers[:5]}...")
 
-    def _progress(n):
-        try:
-            wb.app.status_bar = f"CA Recon: row {n} of {total_rows}..."
-        except Exception:
-            pass
+    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...")
 
     def sv(row, col):
         v = row.get(col, "") if col in row.index else ""
@@ -268,7 +264,7 @@ def _run_with_csv(wb):
 
     for i, (excel_row, row) in enumerate(df.iterrows()):
         if i % 5 == 0:
-            _progress(i + 1)
+            prog.update(f"Reconciling {i + 1} of {total_rows} rows...")
         raw_ext = row.get(EXT_HDR, "")
         ext_val = _norm_ext(raw_ext)
         if not ext_val:
@@ -321,13 +317,14 @@ def _run_with_csv(wb):
         _write(ws, excel_row, headers, STATUS_HDR, status)
         _write(ws, excel_row, headers, DATE_HDR,   today)
 
-    try:
-        wb.app.status_bar = False   # restore default Excel status bar
-    except Exception:
-        pass
+    prog.update("Applying status colors...")
     _log(f"Counts: {cnt}")
     _color_status(ws, _read_df(ws))
+    _log("color done")
+    prog.update("Finishing up...")
     _stamp_dashboard(wb)
+    _log("dashboard stamped")
+    prog.close()
 
     exports = dlg.show_results(cnt)
     if "update" in exports:

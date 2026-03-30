@@ -11,32 +11,30 @@ multiple times.  This avoids the macOS crash caused by re-initialising Tk
 second tk.Tk() is created after the first has been destroyed.
 """
 
+import sys as _sys
+import os as _os
 import tkinter as tk
 from tkinter import filedialog
+
+# On Mac, permanently redirect raw fd 2 to /dev/null for this xlwings
+# subprocess.  macOS Tk 8.5 writes Objective-C warnings directly to fd 2
+# (bypassing Python's sys.stderr) at various points during NSApp init —
+# including on the first Toplevel creation, which happens after any
+# try/finally silence block.  This process is short-lived and ephemeral;
+# stderr is not needed here (errors go to /tmp/zca_recon.log instead).
+if _sys.platform == "darwin":
+    try:
+        _d = _os.open(_os.devnull, _os.O_WRONLY)
+        _os.dup2(_d, 2)
+        _os.close(_d)
+        del _d
+    except Exception:
+        pass
 
 
 # ── Single shared root ────────────────────────────────────────
 
 _root = None
-
-
-def _silence_fd2():
-    """
-    Redirect fd 2 to /dev/null and return a callable that restores it.
-    Used to suppress macOS Objective-C warnings (e.g. Secure Coding) that
-    write directly to the raw file descriptor, bypassing sys.stderr.
-    """
-    import os, sys
-    if sys.platform != "darwin":
-        return lambda: None
-    devnull = os.open(os.devnull, os.O_WRONLY)
-    saved = os.dup(2)
-    os.dup2(devnull, 2)
-    os.close(devnull)
-    def _restore():
-        os.dup2(saved, 2)
-        os.close(saved)
-    return _restore
 
 
 def _get_root():
@@ -49,17 +47,9 @@ def _get_root():
         except Exception:
             _root = None
 
-    # Suppress the macOS "Secure coding" Tk 8.5 warning.
-    # NSApplication finishes initializing restorable state on the first event
-    # loop tick, so keep fd 2 silenced through withdraw + update_idletasks.
-    restore = _silence_fd2()
-    try:
-        _root = tk.Tk()
-        _root.withdraw()
-        _root.update_idletasks()
-    finally:
-        restore()
-
+    _root = tk.Tk()
+    _root.withdraw()
+    _root.update_idletasks()
     try:
         _root.attributes("-topmost", True)
     except Exception:
@@ -155,6 +145,50 @@ def _macos_save_dialog(title, default_name):
         return path or ""
     except Exception:
         return ""
+
+
+# ── Progress window ──────────────────────────────────────────
+
+class ProgressWindow:
+    """
+    Small non-closeable status window for long-running operations.
+    Call update(msg) mid-loop — uses win.update() so it repaints
+    without threading.  Works on both Mac and Windows.
+    """
+    def __init__(self, message="Working..."):
+        root = _get_root()
+        win = tk.Toplevel(root)
+        win.title("CA Reconciliation")
+        win.resizable(False, False)
+        try:
+            win.attributes("-topmost", True)
+        except Exception:
+            pass
+        _center(win, 340, 72)
+        win.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent close
+
+        frame = tk.Frame(win, bg="#1F2D4E", padx=24, pady=20)
+        frame.pack(fill="both", expand=True)
+        self._label = tk.Label(
+            frame, text=message,
+            bg="#1F2D4E", fg="white",
+            font=("Segoe UI", 10))
+        self._label.pack()
+        self._win = win
+        win.update()
+
+    def update(self, message):
+        try:
+            self._label.config(text=message)
+            self._win.update()
+        except Exception:
+            pass
+
+    def close(self):
+        try:
+            self._win.destroy()
+        except Exception:
+            pass
 
 
 # ── Intro dialog ──────────────────────────────────────────────
