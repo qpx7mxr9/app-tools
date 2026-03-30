@@ -49,14 +49,17 @@ def _get_root():
         except Exception:
             _root = None
 
-    # Suppress the macOS "Secure coding" Tk 8.5 warning during NSApp init
+    # Suppress the macOS "Secure coding" Tk 8.5 warning.
+    # NSApplication finishes initializing restorable state on the first event
+    # loop tick, so keep fd 2 silenced through withdraw + update_idletasks.
     restore = _silence_fd2()
     try:
         _root = tk.Tk()
+        _root.withdraw()
+        _root.update_idletasks()
     finally:
         restore()
 
-    _root.withdraw()
     try:
         _root.attributes("-topmost", True)
     except Exception:
