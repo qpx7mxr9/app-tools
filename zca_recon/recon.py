@@ -213,7 +213,16 @@ def _run_with_csv(wb):
     if EXT_HDR not in df_csv.columns:
         dlg.info("Error", f"'{EXT_HDR}' not found in CSV.\n\nFound: {', '.join(df_csv.columns)}"); return
 
-    df_csv["_key"] = df_csv[EXT_HDR].str.strip().str.lower()
+    def _norm_ext(val):
+        """Normalize extension: strip whitespace, drop .0 from Excel floats."""
+        s = str(val).strip()
+        try:
+            s = str(int(float(s)))   # "1001.0" -> "1001"
+        except (ValueError, TypeError):
+            pass
+        return s.lower()
+
+    df_csv["_key"] = df_csv[EXT_HDR].apply(_norm_ext)
     lookup = df_csv.drop_duplicates("_key").set_index("_key")
 
     ws = _get_sheet(wb)
@@ -242,12 +251,17 @@ def _run_with_csv(wb):
         v = cr.get(col, "") if col in cr.index else ""
         return str(v).strip().lower()
 
+    # Log a sample so we can verify key format matches between sheet and CSV
+    sample_keys = list(lookup.index[:5])
+    _log(f"CSV sample keys: {sample_keys}")
+
     for excel_row, row in df.iterrows():
-        ext_val = str(row.get(EXT_HDR, "")).strip()
+        raw_ext = row.get(EXT_HDR, "")
+        ext_val = _norm_ext(raw_ext)
         if not ext_val:
             continue
 
-        key = ext_val.lower()
+        key = ext_val
 
         if key in lookup.index:
             cr = lookup.loc[key]
