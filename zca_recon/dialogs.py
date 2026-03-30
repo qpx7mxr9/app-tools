@@ -56,21 +56,38 @@ def _focus_python():
 
 # ── File pickers ──────────────────────────────────────────────
 
-def pick_csv(title="Select Source Export CSV"):
+def _center_root_for_dialog():
+    """
+    Briefly show the root at screen center before opening a native file dialog.
+    macOS positions native dialogs relative to the parent window's location,
+    so the parent must be visible and centered.
+    """
     root = _get_root()
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    root.geometry(f"1x1+{sw // 2}+{sh // 2}")
+    root.deiconify()
+    root.update()
+    return root
+
+
+def pick_csv(title="Select Source Export CSV"):
+    root = _center_root_for_dialog()
     _focus_python()
     path = filedialog.askopenfilename(
         parent=root, title=title,
         filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")])
+    root.withdraw()
     return path or ""
 
 
 def get_save_path(suggested, title="Save CSV"):
-    root = _get_root()
+    root = _center_root_for_dialog()
     _focus_python()
     path = filedialog.asksaveasfilename(
         parent=root, title=title, initialfile=suggested,
         defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
+    root.withdraw()
     return path or ""
 
 
