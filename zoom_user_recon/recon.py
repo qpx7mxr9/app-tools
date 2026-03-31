@@ -284,74 +284,87 @@ def run_zoom_user_audit():
 
     # ── Process each user row ─────────────────────────────────────────────────
     cnt = dict(active=0, inactive=0, domain=0, pending=0, missing=0)
+    total_rows = len(df)
 
-    for excel_row, row in df.iterrows():
-        ue = _norm_email(str(row.iloc[email_col - 1]))
-        if not ue:
-            continue
+    prog = dlg.ProgressWindow(f"Auditing 0 of {total_rows} users...")
 
-        ws.range((excel_row, status_col)).value   = ""
-        ws.range((excel_row, license_col)).value  = ""
-        ws.range((excel_row, external_col)).value = ""
-        ws.range((excel_row, status_col)).color   = None
-        ws.range((excel_row, license_col)).color  = None
-        ws.range((excel_row, external_col)).color = None
+    try:
+        for i, (excel_row, row) in enumerate(df.iterrows()):
+            if i % 5 == 0:
+                prog.update(f"Auditing {i + 1} of {total_rows} users...")
 
-        if ue in zoom_dict:
-            z_stat, z_lic = zoom_dict[ue]
-            if z_stat.lower() == "active":
-                ws.range((excel_row, status_col)).value = "Active - In Account"
-                cnt["active"] += 1
-            else:
-                ws.range((excel_row, status_col)).value = "Inactive - In Account"
-                cnt["inactive"] += 1
-            ws.range((excel_row, license_col)).value  = z_lic
-            ws.range((excel_row, external_col)).value = ""
+            ue = _norm_email(str(row.iloc[email_col - 1]))
+            if not ue:
+                continue
 
-        elif ue in pending_set:
-            ws.range((excel_row, status_col)).value   = "Pending Activation"
+            ws.range((excel_row, status_col)).value   = ""
             ws.range((excel_row, license_col)).value  = ""
             ws.range((excel_row, external_col)).value = ""
-            cnt["pending"] += 1
+            ws.range((excel_row, status_col)).color   = None
+            ws.range((excel_row, license_col)).color  = None
+            ws.range((excel_row, external_col)).color = None
 
-        elif ue in domain_dict:
-            d_type, d_num = domain_dict[ue]
-            ws.range((excel_row, status_col)).value  = "Not In Account"
-            ws.range((excel_row, license_col)).value = ""
-            t = d_type.lower()
-            if "business" in t:
-                ext_info = "Business Account"
-                if d_num:
-                    ext_info += f" | Acct #: {d_num}"
-            elif "pro" in t:
-                ext_info = "Pro Account"
-                if d_num:
-                    ext_info += f" | Acct #: {d_num}"
-            elif "free with credit" in t:
-                ext_info = "Free Account (Credit Card)"
-            elif "free" in t:
-                ext_info = "Free Account"
+            if ue in zoom_dict:
+                z_stat, z_lic = zoom_dict[ue]
+                if z_stat.lower() == "active":
+                    ws.range((excel_row, status_col)).value = "Active - In Account"
+                    cnt["active"] += 1
+                else:
+                    ws.range((excel_row, status_col)).value = "Inactive - In Account"
+                    cnt["inactive"] += 1
+                ws.range((excel_row, license_col)).value  = z_lic
+                ws.range((excel_row, external_col)).value = ""
+
+            elif ue in pending_set:
+                ws.range((excel_row, status_col)).value   = "Pending Activation"
+                ws.range((excel_row, license_col)).value  = ""
+                ws.range((excel_row, external_col)).value = ""
+                cnt["pending"] += 1
+
+            elif ue in domain_dict:
+                d_type, d_num = domain_dict[ue]
+                ws.range((excel_row, status_col)).value  = "Not In Account"
+                ws.range((excel_row, license_col)).value = ""
+                t = d_type.lower()
+                if "business" in t:
+                    ext_info = "Business Account"
+                    if d_num: ext_info += f" | Acct #: {d_num}"
+                elif "pro" in t:
+                    ext_info = "Pro Account"
+                    if d_num: ext_info += f" | Acct #: {d_num}"
+                elif "free with credit" in t:
+                    ext_info = "Free Account (Credit Card)"
+                elif "free" in t:
+                    ext_info = "Free Account"
+                else:
+                    ext_info = d_type
+                    if d_num: ext_info += f" | Acct #: {d_num}"
+                ws.range((excel_row, external_col)).value = ext_info
+                cnt["domain"] += 1
+
             else:
-                ext_info = d_type
-                if d_num:
-                    ext_info += f" | Acct #: {d_num}"
-            ws.range((excel_row, external_col)).value = ext_info
-            cnt["domain"] += 1
+                ws.range((excel_row, status_col)).value   = "Not Found"
+                ws.range((excel_row, license_col)).value  = ""
+                ws.range((excel_row, external_col)).value = ""
+                cnt["missing"] += 1
 
-        else:
-            ws.range((excel_row, status_col)).value   = "Not Found"
-            ws.range((excel_row, license_col)).value  = ""
-            ws.range((excel_row, external_col)).value = ""
-            cnt["missing"] += 1
+    except Exception as _err:
+        import traceback as _tb
+        _log(f"Loop error: {_err}\n{_tb.format_exc()}")
+        prog.close()
+        dlg.info("Audit Error", str(_err))
+        return
 
     _log(f"Counts: {cnt}")
 
+    prog.update("Applying status colors...")
     # Color-code status column
     df_fresh = _read_df(ws)
     _apply_colors(ws, df_fresh, status_col)
 
     # Stamp dashboard
     _stamp_dashboard(wb)
+    prog.close()
 
     # ── Summary ───────────────────────────────────────────────────────────────
     total = sum(cnt.values())
