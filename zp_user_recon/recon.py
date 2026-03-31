@@ -657,15 +657,20 @@ def run_zp_reconciliation():
     # ── Re-read sheet so exports see the freshly written statuses ────────────
     df_fresh  = _read_df(ws)
     headers_f = list(df_fresh.columns)
+    _log(f"df_fresh rows={len(df_fresh)}  H_STATUS in headers={H_STATUS in headers_f}")
 
     # ── Results dialog + optional exports ────────────────────────────────────
+    _log("Showing results dialog...")
     exports = dlg.show_zp_results({
         "complete":   cnt["complete"],
         "discrep":    cnt["discrep"],
         "progress":   cnt["progress"],
         "incomplete": cnt["incomplete"],
     })
+    _log(f"Exports selected: {exports}")
     if "update" in exports:
+        _log("Calling UPDATE export...")
         _export(wb, ws, df_fresh, headers_f, "update", phone_source)
     if "add" in exports:
+        _log("Calling ADD export...")
         _export(wb, ws, df_fresh, headers_f, "add", phone_source)
