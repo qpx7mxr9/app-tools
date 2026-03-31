@@ -204,19 +204,13 @@ class ProgressWindow:
     def update(self, message):
         try:
             self._var.set(message)
-            # update() (not update_idletasks()) processes real system events —
-            # on macOS this prevents the "app unresponsive" dimming/beach-ball
-            # and actually flushes the Cocoa draw queue so text changes show
-            self._win.update()
+            self._win.update_idletasks()
             self._win.lift()
         except Exception:
             pass
 
     def close(self):
         try:
-            # withdraw() hides the window immediately at the Cocoa layer
-            # even if the event queue is dirty after update() calls;
-            # destroy() then cleans up — user never sees it linger
             self._win.withdraw()
             self._win.destroy()
         except Exception:
