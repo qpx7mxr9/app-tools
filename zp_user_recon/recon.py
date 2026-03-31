@@ -385,6 +385,11 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
         "Outbound Caller ID":  outbound_sh_col,
     }
 
+    all_statuses = [str(row.get(H_STATUS, "") or "").strip() for _, row in df.iterrows()]
+    _log(f"export mode={mode} statuses_looking_for={statuses}")
+    _log(f"export unique statuses on sheet: {sorted(set(all_statuses))}")
+    _log(f"export total rows in df: {len(df)}")
+
     rows = []
     for _, row in df.iterrows():
         status = str(row.get(H_STATUS, "") or "").strip()

@@ -436,6 +436,7 @@ def _run_with_csv(wb):
 
 
 def _run_without_csv(wb):
+    import pandas as pd
     _log("_run_without_csv start")
     ws = _get_sheet(wb)
     if ws is None:
@@ -531,6 +532,7 @@ def _export(wb, export_type):
     ]
 
     s = df[STATUS_HDR].astype(str).str.strip()
+    _log(f"export unique statuses: {sorted(s.unique().tolist())}")
 
     if export_type == "update":
         mask = s.isin(["Discrepancy", "In Progress"])
@@ -538,6 +540,7 @@ def _export(wb, export_type):
         mask = s == "Not Found in CSV"
 
     filtered = df[mask]
+    _log(f"export filtered rows: {len(filtered)}")
 
     if filtered.empty:
         dlg.info("Nothing to Export", "No matching rows found for this export type."); return
