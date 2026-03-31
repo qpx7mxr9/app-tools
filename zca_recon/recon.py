@@ -200,24 +200,23 @@ def _color_status(ws, df):
 
 
 def _stamp_dashboard(wb):
-    """Write last-run timestamp to the Dashboard sheet."""
-    try:
-        dash = wb.sheets["Dashboard"]
-    except Exception:
-        return
-    now_str = datetime.now().strftime("%m-%d-%Y %H:%M")
-    data = dash.used_range.value or []
-    for r_idx, row in enumerate(data):
-        if not row:
+    """Write last-run timestamp next to DASH_LABEL on CA Tools or Dashboard sheet."""
+    now_str = datetime.now().strftime("%m/%d/%Y %I:%M %p")
+    for sheet_name in ("CA Tools", "Dashboard"):
+        try:
+            dash = wb.sheets[sheet_name]
+        except Exception:
             continue
-        for c_idx, cell in enumerate(row):
-            if cell and str(cell).strip() == DASH_LABEL:
-                dash.range((r_idx + 1, c_idx + 2)).value = now_str
-                return
-    try:
-        dash.range("J19").value = now_str
-    except Exception:
-        pass
+        data = dash.used_range.value or []
+        for r_idx, row in enumerate(data):
+            if not row:
+                continue
+            for c_idx, cell in enumerate(row):
+                if cell and str(cell).strip() == DASH_LABEL:
+                    dash.range((r_idx + 1, c_idx + 3)).value = now_str
+                    _log(f"stamp_dashboard: wrote '{now_str}' to {sheet_name} row={r_idx+1} col={c_idx+3}")
+                    return
+        _log(f"stamp_dashboard: label '{DASH_LABEL}' not found on sheet '{sheet_name}'")
 
 
 # ── Public entry points ───────────────────────────────────────────────────────

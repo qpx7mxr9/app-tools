@@ -137,11 +137,13 @@ def _apply_colors(ws, df, status_col_idx):
 # ── Dashboard stamp ───────────────────────────────────────────────────────────
 
 def _stamp_dashboard(wb):
+    """Write last-run timestamp next to DASH_LABEL on CA Tools or Dashboard sheet."""
     now_str = datetime.now().strftime("%m/%d/%Y %I:%M %p")
     for sheet_name in ("CA Tools", "Dashboard"):
         try:
             dash = wb.sheets[sheet_name]
         except Exception:
+            _log(f"stamp_dashboard: sheet '{sheet_name}' not found")
             continue
         data = dash.used_range.value or []
         for r_idx, row in enumerate(data):
@@ -150,7 +152,9 @@ def _stamp_dashboard(wb):
             for c_idx, cell in enumerate(row):
                 if cell and str(cell).strip() == DASH_LABEL:
                     dash.range((r_idx + 1, c_idx + 3)).value = now_str
+                    _log(f"stamp_dashboard: wrote '{now_str}' to {sheet_name} row={r_idx+1} col={c_idx+3}")
                     return
+        _log(f"stamp_dashboard: label '{DASH_LABEL}' not found on '{sheet_name}'")
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
