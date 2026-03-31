@@ -7,25 +7,42 @@
 ' Repo:  https://github.com/qpx7mxr9/app-tools
 ' ============================================================
 
+Private Function FolderExists(p As String) As Boolean
+    On Error Resume Next
+    FolderExists = (GetAttr(p) And vbDirectory) = vbDirectory
+    On Error GoTo 0
+End Function
+
 Private Function PyPath() As String
     Dim p As String
 
-    ' ── Windows paths ─────────────────────────────────────
-    p = Environ("USERPROFILE") & "\app-tools"
-    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+    #If Mac Then
+        ' ── Mac paths ─────────────────────────────────────
+        Dim home As String
+        home = Environ("HOME")
+        If home = "" Then home = "/Users/" & Environ("USER")
 
-    p = Environ("USERPROFILE") & "\Documents\GitHub\app-tools"
-    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+        p = home & "/app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
 
-    ' ── Mac paths ─────────────────────────────────────────
-    p = Environ("HOME") & "/app-tools"
-    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+        p = home & "/Documents/GitHub/app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
 
-    p = Environ("HOME") & "/Documents/GitHub/app-tools"
-    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+        p = home & "/GitHub/app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
+    #Else
+        ' ── Windows paths ─────────────────────────────────
+        p = Environ("USERPROFILE") & "\app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
 
-    MsgBox "Could not find app-tools folder. " & vbCrLf & _
-           "Expected: " & Environ("USERPROFILE") & "\app-tools", _
+        p = Environ("USERPROFILE") & "\Documents\GitHub\app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
+
+        p = Environ("USERPROFILE") & "\GitHub\app-tools"
+        If FolderExists(p) Then PyPath = p : Exit Function
+    #End If
+
+    MsgBox "Could not find app-tools folder." & vbCrLf & "Last tried: " & p, _
            vbExclamation, "App Tools"
     PyPath = ""
 End Function
