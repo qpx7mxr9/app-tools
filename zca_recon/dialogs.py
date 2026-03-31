@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 # Mac doesn't have Segoe UI — use Helvetica Neue which is visually similar
-_FONT = _FONT if _platform.system() == "Windows" else "Helvetica Neue"
+_FONT = "Segoe UI" if _platform.system() == "Windows" else "Helvetica Neue"
 
 # On Mac, permanently redirect raw fd 2 to /dev/null for this xlwings
 # subprocess.  macOS Tk 8.5 writes Objective-C warnings directly to fd 2
