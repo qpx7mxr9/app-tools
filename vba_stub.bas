@@ -35,7 +35,6 @@ Private Function PyPath() As String
     If isMac Then
         Dim home As String
         home = RealHome()
-
         p = home & "/app-tools"
         If FolderExists(p) Then PyPath = p: Exit Function
         p = home & "/Documents/GitHub/app-tools"
@@ -56,15 +55,54 @@ Private Function PyPath() As String
     PyPath = ""
 End Function
 
-Private Sub XRun(code As String)
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    Dim full As String
-    full = "import sys; sys.path.insert(0, '" & p & "'); " & code
-    Application.Run "xlwings.RunPython", full
+Private Sub SetPythonPath(p As String)
+    ' Write PYTHONPATH into xlwings.conf sheet so xlwings handles sys.path natively.
+    ' Avoids injecting sys.path.insert into the code string, which breaks on Mac
+    ' because xlwings uses semicolons as internal delimiters.
+    Dim ws As Worksheet
+    Dim found As Boolean
+    Dim i As Long
+
+    found = False
+    For i = 1 To ThisWorkbook.Sheets.Count
+        If ThisWorkbook.Sheets(i).Name = "xlwings.conf" Then
+            Set ws = ThisWorkbook.Sheets(i)
+            found = True
+            Exit For
+        End If
+    Next i
+
+    If Not found Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = "xlwings.conf"
+        ws.Visible = xlSheetHidden
+    End If
+
+    For i = 1 To 20
+        If ws.Cells(i, 1).Value = "PYTHONPATH" Then
+            ws.Cells(i, 2).Value = p
+            Exit Sub
+        End If
+    Next i
+    ' Not found — add it
+    For i = 1 To 20
+        If ws.Cells(i, 1).Value = "" Then
+            ws.Cells(i, 1).Value = "PYTHONPATH"
+            ws.Cells(i, 2).Value = p
+            Exit Sub
+        End If
+    Next i
 End Sub
 
-' ── Dashboard ─────────────────────────────────────────────
+Private Sub XRun(code As String)
+    Dim p As String
+    p = PyPath()
+    If p = "" Then Exit Sub
+    SetPythonPath p
+    Application.Run "xlwings.RunPython", code
+End Sub
+
+' -- Dashboard ---------------------------------------------
 Sub Dashboard_Build()
     XRun "import dashboard; dashboard.build_dashboard()"
 End Sub
@@ -73,7 +111,7 @@ Sub Dashboard_Refresh()
     XRun "import dashboard; dashboard.refresh_ca_block()"
 End Sub
 
-' ── Common Areas ──────────────────────────────────────────
+' -- Common Areas ------------------------------------------
 Sub ZCA_RunReconciliation()
     XRun "import zca_recon; zca_recon.run_reconciliation()"
 End Sub
@@ -86,7 +124,7 @@ Sub ZCA_ExportAdd()
     XRun "import zca_recon; zca_recon.export_add()"
 End Sub
 
-' ── Zoom User Recon ───────────────────────────────────────
+' -- Zoom User Recon ---------------------------------------
 Sub ZUR_RunAudit()
     XRun "from zoom_user_recon.recon import run_zoom_user_audit; run_zoom_user_audit()"
 End Sub
@@ -95,7 +133,7 @@ Sub ZUR_ClearResults()
     XRun "from zoom_user_recon.recon import clear_zoom_results; clear_zoom_results()"
 End Sub
 
-' ── ZP User Recon ─────────────────────────────────────────
+' -- ZP User Recon -----------------------------------------
 Sub ZPU_RunReconciliation()
     XRun "from zp_user_recon.recon import run_zp_reconciliation; run_zp_reconciliation()"
 End Sub
