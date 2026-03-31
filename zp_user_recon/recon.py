@@ -61,7 +61,6 @@ C_DP1_MAC   = "Desk Phone 1's MAC Address"
 C_DP1_PROV  = "Desk Phone 1's Provision Template"
 
 STATUS_COMPLETE   = "Setup Complete"
-STATUS_SOFTPHONE  = "Softphone"
 STATUS_PROGRESS   = "Setup in Progress"
 STATUS_DISCREP    = "Setup Discrepancy"
 STATUS_INCOMPLETE = "Setup Incomplete"
@@ -82,7 +81,6 @@ MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
 _STATUS_COLORS = {
     STATUS_COMPLETE:   (198, 239, 206),   # green
-    STATUS_SOFTPHONE:  (198, 239, 206),   # green — good to go
     STATUS_PROGRESS:   (255, 235, 156),   # yellow
     STATUS_DISCREP:    (255, 199, 206),   # red/pink
     STATUS_INCOMPLETE: (252, 228, 214),   # light orange
@@ -350,7 +348,7 @@ _ZOOM_TEMPLATE_COLS = [
     "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",
 ]
 
-_UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP, STATUS_SOFTPHONE}
+_UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
 _ADD_STATUSES    = {STATUS_INCOMPLETE}
 
 
@@ -553,7 +551,7 @@ def run_zp_reconciliation():
     _clear_mismatch_highlights(ws, df, headers, compare_cols)
 
     # ── Process each DGW row ──────────────────────────────────────────────────
-    cnt = dict(complete=0, softphone=0, progress=0, discrep=0, incomplete=0)
+    cnt = dict(complete=0, progress=0, discrep=0, incomplete=0)
     total_rows = len(df)
 
     prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...")
@@ -616,15 +614,10 @@ def run_zp_reconciliation():
             if not dev_match:   mismatches.add(H_DP1_BRAND)
             if dev_discrep:     mismatches.add(H_DP1_MAC)
 
-            if all_match and softphone:
-                ws.range((excel_row, d[H_STATUS])).value = STATUS_SOFTPHONE
-                _write(ws, excel_row, headers, CHANGES_HDR, "Softphone")
-                _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
-                _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
-                cnt["softphone"] += 1
-            elif all_match:
+            if all_match:
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
-                _write(ws, excel_row, headers, CHANGES_HDR, "")
+                changes_note = "Softphone" if softphone else ""
+                _write(ws, excel_row, headers, CHANGES_HDR, changes_note)
                 _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
                 _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
                 cnt["complete"] += 1
@@ -660,7 +653,6 @@ def run_zp_reconciliation():
     # ── Results dialog + optional exports ────────────────────────────────────
     exports = dlg.show_zp_results({
         "complete":   cnt["complete"],
-        "softphone":  cnt["softphone"],
         "discrep":    cnt["discrep"],
         "progress":   cnt["progress"],
         "incomplete": cnt["incomplete"],

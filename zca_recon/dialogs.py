@@ -303,17 +303,16 @@ def show_zp_results(counts):
     win.resizable(False, False)
     try: win.attributes("-topmost", True)
     except Exception: pass
-    _center(win, 400, 330)
+    _center(win, 480, 320)
 
     _make_header(win, "ZP RECONCILIATION COMPLETE")
 
     stats = tk.Frame(win, bg="white", padx=20, pady=14)
     stats.pack(fill="x")
-    _stat_row(stats, "Setup Complete",    counts.get("complete",   0), "#00612A", "#C6EFCE", 20)
-    _stat_row(stats, "Softphone",         counts.get("softphone",  0), "#00612A", "#C6EFCE", 20)
-    _stat_row(stats, "Setup Discrepancy", counts.get("discrep",    0), "#9C6400", "#FFEB9C", 20)
-    _stat_row(stats, "Setup in Progress", counts.get("progress",   0), "#9C6400", "#FFEB9C", 20)
-    _stat_row(stats, "Setup Incomplete",  counts.get("incomplete", 0), "#9C0006", "#FFC7CE", 20)
+    _stat_row(stats, "Setup Complete",    counts.get("complete",   0), "#00612A", "#C6EFCE", 22)
+    _stat_row(stats, "Setup Discrepancy", counts.get("discrep",    0), "#9C6400", "#FFEB9C", 22)
+    _stat_row(stats, "Setup in Progress", counts.get("progress",   0), "#9C6400", "#FFEB9C", 22)
+    _stat_row(stats, "Setup Incomplete",  counts.get("incomplete", 0), "#9C0006", "#FFC7CE", 22)
 
     tk.Frame(win, bg="#E0E0E0", height=1).pack(fill="x", padx=20)
 
@@ -322,7 +321,7 @@ def show_zp_results(counts):
     tk.Label(exp, text="Select exports:", bg="white",
              font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 6))
 
-    var_upd = tk.BooleanVar(value=counts.get("discrep", 0) > 0 or counts.get("progress", 0) > 0 or counts.get("softphone", 0) > 0)
+    var_upd = tk.BooleanVar(value=counts.get("discrep", 0) > 0 or counts.get("progress", 0) > 0)
     var_add = tk.BooleanVar(value=counts.get("incomplete", 0) > 0)
     tk.Checkbutton(exp, text="UPDATE file  (Discrepancy / In Progress)",
                    variable=var_upd, bg="white",
@@ -417,7 +416,7 @@ def show_zu_results(counts, has_pending=False):
     win.resizable(False, False)
     try: win.attributes("-topmost", True)
     except Exception: pass
-    _center(win, 400, 310 if has_pending else 280)
+    _center(win, 460, 320 if has_pending else 290)
 
     _make_header(win, "ZOOM USER AUDIT COMPLETE")
 
@@ -544,7 +543,7 @@ def show_results(counts):
         win.attributes("-topmost", True)
     except Exception:
         pass
-    _center(win, 400, 320)
+    _center(win, 480, 340)
 
     # Header
     header = tk.Frame(win, bg="#1F2D4E", height=48)
