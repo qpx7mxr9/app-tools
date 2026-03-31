@@ -642,6 +642,12 @@ def _draw_zu_section(ws, row, zu):
         _border_box(ws, row + 1, c, row + 2, c + 1)
     row += 4
 
+    _row_height(ws, row, 18)
+    _write(ws, row, 2, "Zoom User Last Update:", size=9, italic=True,
+           fg=C_LABEL_FG, bg=C_WHITE, align="left")
+    _write(ws, row, 4, "—", size=9, italic=True, fg=C_LABEL_FG, bg=C_WHITE)
+    row += 1
+
     return _draw_spacer(ws, row, 8)
 
 
@@ -682,6 +688,12 @@ def _draw_zp_section(ws, row, zp):
         _write(ws, row + 2, c, value, bold=True, size=14, fg=fg, bg=bg, align="center")
         _border_box(ws, row + 1, c, row + 2, c + 1)
     row += 4
+
+    _row_height(ws, row, 18)
+    _write(ws, row, 2, "ZP Recon Last Update:", size=9, italic=True,
+           fg=C_LABEL_FG, bg=C_WHITE, align="left")
+    _write(ws, row, 4, "—", size=9, italic=True, fg=C_LABEL_FG, bg=C_WHITE)
+    row += 1
 
     return _draw_spacer(ws, row, 8)
 
