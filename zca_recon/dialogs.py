@@ -191,12 +191,14 @@ class ProgressWindow:
             font=("Segoe UI", 10))
         self._label.pack()
         self._win = win
-        win.update_idletasks()
+        win.update()
 
     def update(self, message):
         try:
             self._label.config(text=message)
-            self._win.update_idletasks()
+            # update() instead of update_idletasks() — forces a real repaint on macOS
+            # where update_idletasks() alone does not flush the draw queue mid-loop
+            self._win.update()
         except Exception:
             pass
 
@@ -229,11 +231,13 @@ def _make_btn_frame(win):
 def _add_cancel_btn(frame, cmd, text="Cancel"):
     tk.Button(frame, text=text, bg="#D8D8D8", fg="#333",
               font=("Segoe UI", 10), width=10, relief="flat",
+              highlightbackground="#D8D8D8",
               cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
 
 def _add_primary_btn(frame, cmd, text="Continue ->", width=13):
     tk.Button(frame, text=text, bg="#1F2D4E", fg="white",
               font=("Segoe UI", 10, "bold"), width=width, relief="flat",
+              highlightbackground="#1F2D4E",
               cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
 
 def _stat_row(parent, label, value, fg, bg, label_width=20):
