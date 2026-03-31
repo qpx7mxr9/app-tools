@@ -65,7 +65,8 @@ STATUS_PROGRESS   = "Setup in Progress"
 STATUS_DISCREP    = "Setup Discrepancy"
 STATUS_INCOMPLETE = "Setup Incomplete"
 
-H_ZP_PACKAGE = "ZP User Package"   # written on Setup Complete with CSV package value
+H_ZP_PACKAGE  = "ZP User Package"   # written on Setup Complete with CSV package value
+H_ROW_STATUS  = "Row Status"        # col AL — only "TCS Approved" rows go into exports
 
 BRAND_WORKPLACE_APP = "workplace app"
 
@@ -367,6 +368,10 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
     for _, row in df.iterrows():
         status = str(row.get(H_STATUS, "") or "").strip()
         if status not in statuses:
+            continue
+        # Only export rows approved for processing (col AL = "TCS Approved")
+        row_status = str(row.get(H_ROW_STATUS, "") or "").strip().lower()
+        if row_status != "tcs approved":
             continue
         out = {}
         for col in export_cols:
