@@ -315,46 +315,54 @@ def _stamp_dashboard(wb):
 
 # ── Export helpers ───────────────────────────────────────────────────────────
 
-_EXPORT_COLS_UPDATE = [
+# Zoom template column order (matches zoomus_user_template exactly)
+_ZOOM_TEMPLATE_COLS = [
     "Email", "First Name", "Last Name", "Package",
-    "Site Code", "Site Name", "Extension Number",
-    "Phone Number (Zoom Temp)", "Outbound Caller ID (Zoom Temp)",
+    "Site Code", "Site Name", "User Template",
+    "Extension Number", "Phone Number", "Outbound Caller ID",
+    "Select Outbound Caller ID", "SMS", "User Status",
     "Desk Phone 1's Brand", "Desk Phone 1's Model",
     "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",
-    CHANGES_HDR,
-]
-
-_EXPORT_COLS_ADD = [
-    "Email", "First Name", "Last Name", "Package",
-    "Site Code", "Site Name", "Extension Number",
-    "Phone Number (Zoom Temp)", "Outbound Caller ID (Zoom Temp)",
-    "Desk Phone 1's Brand", "Desk Phone 1's Model",
-    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",
+    "Desk Phone 2's Brand", "Desk Phone 2's Model",
+    "Desk Phone 2's MAC Address", "Desk Phone 2's Provision Template",
+    "Desk Phone 3's Brand", "Desk Phone 3's Model",
+    "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",
 ]
 
 _UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
 _ADD_STATUSES    = {STATUS_INCOMPLETE}
 
 
-def _export(wb, ws, df, headers, mode):
+def _export(wb, ws, df, headers, mode, phone_source="temp"):
     from datetime import date
     import csv
 
-    if mode == "update":
-        statuses   = _UPDATE_STATUSES
-        cols       = _EXPORT_COLS_UPDATE
-        suggested  = f"ZPU_Update_{date.today().strftime('%Y%m%d')}.csv"
-        title      = "Save ZP Update CSV"
-    else:
-        statuses   = _ADD_STATUSES
-        cols       = _EXPORT_COLS_ADD
-        suggested  = f"ZPU_Add_{date.today().strftime('%Y%m%d')}.csv"
-        title      = "Save ZP Add CSV"
+    use_temp = phone_source == "temp"
+    phone_sh_col   = H_PHONE_TEMP  if use_temp else H_PHONE
+    outbound_sh_col = H_OUTBOUND_TEMP if use_temp else H_OUTBOUND
 
-    status_col = headers.index(H_STATUS) if H_STATUS in headers else -1
-    if status_col < 0:
+    if mode == "update":
+        statuses  = _UPDATE_STATUSES
+        suggested = f"ZPU_Update_{date.today().strftime('%Y%m%d')}.csv"
+        title     = "Save ZP Update CSV"
+        # Add Changes column at end for update exports
+        export_cols = _ZOOM_TEMPLATE_COLS + [CHANGES_HDR]
+    else:
+        statuses  = _ADD_STATUSES
+        suggested = f"ZPU_Add_{date.today().strftime('%Y%m%d')}.csv"
+        title     = "Save ZP Add CSV"
+        export_cols = _ZOOM_TEMPLATE_COLS
+
+    if H_STATUS not in headers:
         dlg.info("Export Error", f"'{H_STATUS}' column not found.")
         return
+
+    # Column mapping: Zoom template col → DGW sheet col
+    # Phone Number / Outbound Caller ID use whichever source was chosen
+    col_map = {
+        "Phone Number":        phone_sh_col,
+        "Outbound Caller ID":  outbound_sh_col,
+    }
 
     rows = []
     for _, row in df.iterrows():
@@ -362,9 +370,10 @@ def _export(wb, ws, df, headers, mode):
         if status not in statuses:
             continue
         out = {}
-        for col in cols:
-            if col in headers:
-                out[col] = row.get(col, "")
+        for col in export_cols:
+            sheet_col = col_map.get(col, col)   # remap phone cols, rest are direct
+            if sheet_col in headers:
+                out[col] = row.get(sheet_col, "")
             else:
                 out[col] = ""
         rows.append(out)
@@ -379,11 +388,13 @@ def _export(wb, ws, df, headers, mode):
 
     try:
         with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=cols)
+            writer = csv.DictWriter(f, fieldnames=export_cols)
             writer.writeheader()
             writer.writerows(rows)
+        src_label = "Zoom Temp" if use_temp else "Actual"
         dlg.info("Export Complete",
-                 f"{mode.upper()} export saved:\n{save_path}\n\n{len(rows)} rows.")
+                 f"{mode.upper()} export saved ({src_label} numbers):\n"
+                 f"{save_path}\n\n{len(rows)} rows.")
     except Exception as e:
         dlg.info("Export Error", str(e))
 
@@ -600,6 +611,10 @@ def run_zp_reconciliation():
     _stamp_dashboard(wb)
     prog.close()
 
+    # ── Re-read sheet so exports see the freshly written statuses ────────────
+    df_fresh  = _read_df(ws)
+    headers_f = list(df_fresh.columns)
+
     # ── Results dialog + optional exports ────────────────────────────────────
     exports = dlg.show_zp_results({
         "complete":   cnt["complete"],
@@ -608,6 +623,6 @@ def run_zp_reconciliation():
         "incomplete": cnt["incomplete"],
     })
     if "update" in exports:
-        _export(wb, ws, df, headers, "update")
+        _export(wb, ws, df_fresh, headers_f, "update", phone_source)
     if "add" in exports:
-        _export(wb, ws, df, headers, "add")
+        _export(wb, ws, df_fresh, headers_f, "add", phone_source)
