@@ -55,51 +55,17 @@ Private Function PyPath() As String
     PyPath = ""
 End Function
 
-Private Sub SetPythonPath(p As String)
-    ' Write PYTHONPATH into xlwings.conf sheet so xlwings handles sys.path natively.
-    ' Avoids injecting sys.path.insert into the code string, which breaks on Mac
-    ' because xlwings uses semicolons as internal delimiters.
-    Dim ws As Worksheet
-    Dim found As Boolean
-    Dim i As Long
-
-    found = False
-    For i = 1 To ThisWorkbook.Sheets.Count
-        If ThisWorkbook.Sheets(i).Name = "xlwings.conf" Then
-            Set ws = ThisWorkbook.Sheets(i)
-            found = True
-            Exit For
-        End If
-    Next i
-
-    If Not found Then
-        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        ws.Name = "xlwings.conf"
-        ws.Visible = xlSheetHidden
-    End If
-
-    For i = 1 To 20
-        If ws.Cells(i, 1).Value = "PYTHONPATH" Then
-            ws.Cells(i, 2).Value = p
-            Exit Sub
-        End If
-    Next i
-    ' Not found — add it
-    For i = 1 To 20
-        If ws.Cells(i, 1).Value = "" Then
-            ws.Cells(i, 1).Value = "PYTHONPATH"
-            ws.Cells(i, 2).Value = p
-            Exit Sub
-        End If
-    Next i
-End Sub
-
 Private Sub XRun(code As String)
     Dim p As String
     p = PyPath()
     If p = "" Then Exit Sub
-    SetPythonPath p
-    Application.Run "xlwings.RunPython", code
+    ' Use Chr(10) newlines — NOT semicolons — to separate Python statements.
+    ' On Mac, xlwings uses semicolons as internal delimiters so semicolons
+    ' in the code string corrupt the prepare_sys_path() call.
+    Application.Run "xlwings.RunPython", _
+        "import sys" & Chr(10) & _
+        "sys.path.insert(0, '" & p & "')" & Chr(10) & _
+        code
 End Sub
 
 ' -- Dashboard ---------------------------------------------
