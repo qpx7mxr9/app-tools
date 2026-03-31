@@ -313,6 +313,81 @@ def _stamp_dashboard(wb):
         pass
 
 
+# ── Export helpers ───────────────────────────────────────────────────────────
+
+_EXPORT_COLS_UPDATE = [
+    "Email", "First Name", "Last Name", "Package",
+    "Site Code", "Site Name", "Extension Number",
+    "Phone Number (Zoom Temp)", "Outbound Caller ID (Zoom Temp)",
+    "Desk Phone 1's Brand", "Desk Phone 1's Model",
+    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",
+    CHANGES_HDR,
+]
+
+_EXPORT_COLS_ADD = [
+    "Email", "First Name", "Last Name", "Package",
+    "Site Code", "Site Name", "Extension Number",
+    "Phone Number (Zoom Temp)", "Outbound Caller ID (Zoom Temp)",
+    "Desk Phone 1's Brand", "Desk Phone 1's Model",
+    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",
+]
+
+_UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
+_ADD_STATUSES    = {STATUS_INCOMPLETE}
+
+
+def _export(wb, ws, df, headers, mode):
+    from datetime import date
+    import csv
+
+    if mode == "update":
+        statuses   = _UPDATE_STATUSES
+        cols       = _EXPORT_COLS_UPDATE
+        suggested  = f"ZPU_Update_{date.today().strftime('%Y%m%d')}.csv"
+        title      = "Save ZP Update CSV"
+    else:
+        statuses   = _ADD_STATUSES
+        cols       = _EXPORT_COLS_ADD
+        suggested  = f"ZPU_Add_{date.today().strftime('%Y%m%d')}.csv"
+        title      = "Save ZP Add CSV"
+
+    status_col = headers.index(H_STATUS) if H_STATUS in headers else -1
+    if status_col < 0:
+        dlg.info("Export Error", f"'{H_STATUS}' column not found.")
+        return
+
+    rows = []
+    for _, row in df.iterrows():
+        status = str(row.get(H_STATUS, "") or "").strip()
+        if status not in statuses:
+            continue
+        out = {}
+        for col in cols:
+            if col in headers:
+                out[col] = row.get(col, "")
+            else:
+                out[col] = ""
+        rows.append(out)
+
+    if not rows:
+        dlg.info("Export", f"No rows to export for {mode.upper()}.")
+        return
+
+    save_path = dlg.get_save_path(suggested, title)
+    if not save_path:
+        return
+
+    try:
+        with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=cols)
+            writer.writeheader()
+            writer.writerows(rows)
+        dlg.info("Export Complete",
+                 f"{mode.upper()} export saved:\n{save_path}\n\n{len(rows)} rows.")
+    except Exception as e:
+        dlg.info("Export Error", str(e))
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_zp_reconciliation():
@@ -361,6 +436,11 @@ def run_zp_reconciliation():
         return
 
     d = required  # alias for brevity
+
+    # ── Intro dialog ──────────────────────────────────────────────────────────
+    action = dlg.show_zp_intro()
+    if action != "import":
+        return
 
     # ── Pick Zoom Phone CSV ───────────────────────────────────────────────────
     csv_path = dlg.pick_csv("Select Zoom Phone Users CSV")
@@ -520,10 +600,14 @@ def run_zp_reconciliation():
     _stamp_dashboard(wb)
     prog.close()
 
-    # ── Summary ───────────────────────────────────────────────────────────────
-    dlg.info("Zoom Phone Reconciliation",
-             f"Reconciliation complete.\n\n"
-             f"Setup Complete:      {cnt['complete']}\n"
-             f"Setup in Progress:   {cnt['progress']}\n"
-             f"Setup Discrepancy:   {cnt['discrep']}\n"
-             f"Setup Incomplete:    {cnt['incomplete']}")
+    # ── Results dialog + optional exports ────────────────────────────────────
+    exports = dlg.show_zp_results({
+        "complete":   cnt["complete"],
+        "discrep":    cnt["discrep"],
+        "progress":   cnt["progress"],
+        "incomplete": cnt["incomplete"],
+    })
+    if "update" in exports:
+        _export(wb, ws, df, headers, "update")
+    if "add" in exports:
+        _export(wb, ws, df, headers, "add")

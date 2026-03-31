@@ -200,6 +200,11 @@ def run_zoom_user_audit():
                  f"{', '.join(missing_hdrs)}")
         return
 
+    # ── Intro dialog — choose optional files ──────────────────────────────────
+    intro = dlg.show_zu_intro()
+    if intro["action"] != "start":
+        return
+
     # ── Step 1: Zoom Users Export (required) ──────────────────────────────────
     zoom_path = dlg.pick_file_any("Step 1 \u2013 Select Zoom Users Export")
     if not zoom_path:
@@ -219,12 +224,7 @@ def run_zoom_user_audit():
 
     # ── Step 2: Domain Data (optional) ────────────────────────────────────────
     df_domain = None
-    if dlg.ask_yes_no(
-            "Zoom User Status Audit \u2013 Step 2",
-            "Do you want to check Domain Data?\n\n"
-            "Select the domain data file (CSV or Excel).\n\n"
-            "Lists ALL domain users including those not in the Zoom tenant.\n"
-            "Columns used: Email | Account Type | Zoom Acct Number"):
+    if intro["domain"]:
         domain_path = dlg.pick_file_any("Step 2 \u2013 Select Domain Data")
         if domain_path:
             try:
@@ -239,12 +239,7 @@ def run_zoom_user_audit():
 
     # ── Step 3: Pending Users (optional) ──────────────────────────────────────
     df_pending = None
-    if dlg.ask_yes_no(
-            "Zoom User Status Audit \u2013 Step 3",
-            "Do you want to check Pending Users?\n\n"
-            "Select the pending users file (CSV or Excel).\n\n"
-            "Lists users with pending Zoom account activation.\n"
-            "Column used: Email"):
+    if intro["pending"]:
         pending_path = dlg.pick_file_any("Step 3 \u2013 Select Pending Users")
         if pending_path:
             try:
@@ -254,31 +249,6 @@ def run_zoom_user_audit():
                 dlg.info("Warning", f"Could not load Pending Users:\n{e}\n\nContinuing without it.")
 
     p_email_col = _find_df_col(df_pending, "Email") if df_pending is not None else None
-
-    # ── Confirm column mapping ─────────────────────────────────────────────────
-    last_row = len(df)
-    confirm_lines = [
-        "COLUMN MAPPING \u2013 PLEASE CONFIRM",
-        "",
-        "Users sheet output:",
-        f"  Email col:              {email_col}",
-        f"  Zoom User Status col:   {status_col}",
-        f"  Zoom License col:       {license_col}",
-        f"  Zoom User External col: {external_col}",
-        "",
-        "Zoom Users import:",
-        f"  Email:       {z_email_col}",
-        f"  Licenses:    {z_license_col}",
-        f"  User Status: {z_status_col}",
-        "",
-        f"Domain Data: {'skipped' if df_domain is None else f'{d_email_col} / {d_acct_type} / {d_acct_num}'}",
-        f"Pending Users: {'skipped' if df_pending is None else str(p_email_col)}",
-        "",
-        f"{last_row} users will be processed. Continue?",
-    ]
-    if not dlg.ask_yes_no("Zoom User Status Audit \u2013 Confirm", "\n".join(confirm_lines)):
-        dlg.info("Cancelled", "Audit cancelled. No changes were made.")
-        return
 
     # ── Build lookup dictionaries ──────────────────────────────────────────────
     zoom_dict = {}
@@ -414,7 +384,7 @@ def run_zoom_user_audit():
             "Zoom license before Zoom Phone can be assigned.",
         ]
 
-    dlg.info("Zoom User Status Audit \u2013 Complete", "\n".join(lines))
+    dlg.show_zu_results(cnt, has_pending=df_pending is not None)
 
 
 # ── Clear results entry point ─────────────────────────────────────────────────

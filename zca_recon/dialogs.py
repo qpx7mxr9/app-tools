@@ -207,6 +207,239 @@ class ProgressWindow:
             pass
 
 
+# ── Shared styled dialog helpers ─────────────────────────────
+
+def _make_header(win, text):
+    h = tk.Frame(win, bg="#1F2D4E", height=50)
+    h.pack(fill="x")
+    h.pack_propagate(False)
+    tk.Label(h, text=text, bg="#1F2D4E", fg="white",
+             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, anchor="center")
+
+def _make_body(win):
+    b = tk.Frame(win, bg="white", padx=20, pady=14)
+    b.pack(fill="both", expand=True)
+    return b
+
+def _make_btn_frame(win):
+    f = tk.Frame(win, bg="#F0F0F0", padx=14, pady=10)
+    f.pack(fill="x")
+    return f
+
+def _add_cancel_btn(frame, cmd, text="Cancel"):
+    tk.Button(frame, text=text, bg="#D8D8D8", fg="#333",
+              font=("Segoe UI", 10), width=10, relief="flat",
+              cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
+
+def _add_primary_btn(frame, cmd, text="Continue ->", width=13):
+    tk.Button(frame, text=text, bg="#1F2D4E", fg="white",
+              font=("Segoe UI", 10, "bold"), width=width, relief="flat",
+              cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
+
+def _stat_row(parent, label, value, fg, bg, label_width=20):
+    row = tk.Frame(parent, bg="white")
+    row.pack(fill="x", pady=2)
+    tk.Label(row, text=f"  {label}:", bg="white",
+             font=("Segoe UI", 10), fg="#555",
+             width=label_width, anchor="w").pack(side="left")
+    tk.Label(row, text=str(value), bg=bg, fg=fg,
+             font=("Segoe UI", 10, "bold"),
+             width=6, relief="flat").pack(side="left")
+
+
+# ── ZP User Recon dialogs ─────────────────────────────────────
+
+def show_zp_intro():
+    """ZP intro dialog. Returns: 'import' or None (cancel)."""
+    result = {"action": None}
+    root = _get_root(); _focus_python()
+    win = tk.Toplevel(root)
+    win.title("ZP User Reconciliation")
+    win.resizable(False, False)
+    try: win.attributes("-topmost", True)
+    except Exception: pass
+    _center(win, 430, 260)
+
+    _make_header(win, "ZOOM PHONE USER RECONCILIATION")
+    body = _make_body(win)
+
+    tk.Label(body, text="What you will need:",
+             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+    tk.Label(body,
+             text="  \u2022  Zoom Phone Users CSV\n"
+                  "     (Admin Portal \u2192 Phone \u2192 Users \u2192 Export)",
+             bg="white", font=("Segoe UI", 9), fg="#555",
+             justify="left").pack(anchor="w", pady=(2, 10))
+    tk.Label(body, text="After reconciling you can export:",
+             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+    tk.Label(body,
+             text="  \u2022  UPDATE file \u2013 in Zoom Phone but data doesn\u2019t match\n"
+                  "  \u2022  ADD file \u2013 not yet in Zoom Phone",
+             bg="white", font=("Segoe UI", 9), fg="#555",
+             justify="left").pack(anchor="w", pady=(2, 0))
+
+    bf = _make_btn_frame(win)
+
+    def on_ok():   result["action"] = "import"; win.destroy()
+    def on_cancel(): win.destroy()
+
+    _add_cancel_btn(bf, on_cancel)
+    _add_primary_btn(bf, on_ok, "Import CSV ->")
+    win.protocol("WM_DELETE_WINDOW", on_cancel)
+    win.lift(); win.focus_force()
+    root.wait_window(win)
+    return result["action"]
+
+
+def show_zp_results(counts):
+    """
+    ZP results dialog. Returns set of {"update", "add"}.
+    counts = {"complete": n, "discrep": n, "progress": n, "incomplete": n}
+    """
+    result = {"exports": set()}
+    root = _get_root(); _focus_python()
+    win = tk.Toplevel(root)
+    win.title("ZP Reconciliation Complete")
+    win.resizable(False, False)
+    try: win.attributes("-topmost", True)
+    except Exception: pass
+    _center(win, 400, 330)
+
+    _make_header(win, "ZP RECONCILIATION COMPLETE")
+
+    stats = tk.Frame(win, bg="white", padx=20, pady=14)
+    stats.pack(fill="x")
+    _stat_row(stats, "Setup Complete",    counts.get("complete",   0), "#00612A", "#C6EFCE", 20)
+    _stat_row(stats, "Setup Discrepancy", counts.get("discrep",    0), "#9C6400", "#FFEB9C", 20)
+    _stat_row(stats, "Setup in Progress", counts.get("progress",   0), "#9C6400", "#FFEB9C", 20)
+    _stat_row(stats, "Setup Incomplete",  counts.get("incomplete", 0), "#9C0006", "#FFC7CE", 20)
+
+    tk.Frame(win, bg="#E0E0E0", height=1).pack(fill="x", padx=20)
+
+    exp = tk.Frame(win, bg="white", padx=20, pady=12)
+    exp.pack(fill="x")
+    tk.Label(exp, text="Select exports:", bg="white",
+             font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 6))
+
+    var_upd = tk.BooleanVar(value=counts.get("discrep", 0) > 0 or counts.get("progress", 0) > 0)
+    var_add = tk.BooleanVar(value=counts.get("incomplete", 0) > 0)
+    tk.Checkbutton(exp, text="UPDATE file  (Discrepancy / In Progress)",
+                   variable=var_upd, bg="white",
+                   font=("Segoe UI", 10), fg="#333",
+                   activebackground="white").pack(anchor="w")
+    tk.Checkbutton(exp, text="ADD file  (Setup Incomplete \u2013 not in Zoom Phone)",
+                   variable=var_add, bg="white",
+                   font=("Segoe UI", 10), fg="#333",
+                   activebackground="white").pack(anchor="w", pady=(4, 0))
+
+    bf = _make_btn_frame(win)
+
+    def on_done():
+        if var_upd.get(): result["exports"].add("update")
+        if var_add.get(): result["exports"].add("add")
+        win.destroy()
+    def on_skip(): win.destroy()
+
+    _add_cancel_btn(bf, on_skip, "Skip Exports")
+    _add_primary_btn(bf, on_done, "Export Selected ->", width=16)
+    win.protocol("WM_DELETE_WINDOW", on_skip)
+    win.lift(); win.focus_force()
+    root.wait_window(win)
+    return result["exports"]
+
+
+# ── ZU Recon dialogs ──────────────────────────────────────────
+
+def show_zu_intro():
+    """
+    ZU intro dialog with checkboxes for optional files.
+    Returns: {"action": "start"|None, "domain": bool, "pending": bool}
+    """
+    result = {"action": None, "domain": False, "pending": False}
+    root = _get_root(); _focus_python()
+    win = tk.Toplevel(root)
+    win.title("Zoom User Audit")
+    win.resizable(False, False)
+    try: win.attributes("-topmost", True)
+    except Exception: pass
+    _center(win, 450, 300)
+
+    _make_header(win, "ZOOM USER STATUS AUDIT")
+    body = _make_body(win)
+
+    tk.Label(body, text="Required:",
+             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+    tk.Label(body,
+             text="  \u2022  Zoom Users Export\n"
+                  "     (Admin Portal \u2192 User Management \u2192 Users \u2192 Export)",
+             bg="white", font=("Segoe UI", 9), fg="#555",
+             justify="left").pack(anchor="w", pady=(2, 10))
+
+    tk.Label(body, text="Optional \u2014 check to include:",
+             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+
+    var_domain  = tk.BooleanVar(value=False)
+    var_pending = tk.BooleanVar(value=False)
+    tk.Checkbutton(body,
+                   text="Domain Data  (Email | Account Type | Zoom Acct Number)",
+                   variable=var_domain, bg="white",
+                   font=("Segoe UI", 9), fg="#555",
+                   activebackground="white").pack(anchor="w", pady=(4, 0))
+    tk.Checkbutton(body,
+                   text="Pending Users  (Email \u2014 users awaiting activation)",
+                   variable=var_pending, bg="white",
+                   font=("Segoe UI", 9), fg="#555",
+                   activebackground="white").pack(anchor="w", pady=(4, 0))
+
+    bf = _make_btn_frame(win)
+
+    def on_start():
+        result["action"]  = "start"
+        result["domain"]  = var_domain.get()
+        result["pending"] = var_pending.get()
+        win.destroy()
+    def on_cancel(): win.destroy()
+
+    _add_cancel_btn(bf, on_cancel)
+    _add_primary_btn(bf, on_start, "Start Audit ->")
+    win.protocol("WM_DELETE_WINDOW", on_cancel)
+    win.lift(); win.focus_force()
+    root.wait_window(win)
+    return result
+
+
+def show_zu_results(counts, has_pending=False):
+    """ZU results dialog. counts = {"active", "inactive", "domain", "pending", "missing"}."""
+    root = _get_root(); _focus_python()
+    win = tk.Toplevel(root)
+    win.title("Zoom User Audit Complete")
+    win.resizable(False, False)
+    try: win.attributes("-topmost", True)
+    except Exception: pass
+    _center(win, 400, 310 if has_pending else 280)
+
+    _make_header(win, "ZOOM USER AUDIT COMPLETE")
+
+    stats = tk.Frame(win, bg="white", padx=20, pady=14)
+    stats.pack(fill="both", expand=True)
+    _stat_row(stats, "Active \u2013 In Account",   counts.get("active",   0), "#00612A", "#C6EFCE", 24)
+    _stat_row(stats, "Inactive \u2013 In Account", counts.get("inactive", 0), "#9C6400", "#FFEB9C", 24)
+    _stat_row(stats, "Not In Account",             counts.get("domain",   0), "#9C0006", "#FFC7CE", 24)
+    if has_pending:
+        _stat_row(stats, "Pending Activation",     counts.get("pending",  0), "#1F497D", "#DCE6F1", 24)
+    _stat_row(stats, "Not Found",                  counts.get("missing",  0), "#666666", "#F2F2F2", 24)
+
+    bf = _make_btn_frame(win)
+
+    def on_done(): win.destroy()
+    tk.Button(bf, text="Done", bg="#1F2D4E", fg="white",
+              font=("Segoe UI", 10, "bold"), width=10, relief="flat",
+              cursor="hand2", command=on_done).pack(side="right")
+    win.protocol("WM_DELETE_WINDOW", on_done)
+    win.lift(); win.focus_force()
+    root.wait_window(win)
+
+
 # ── Intro dialog ──────────────────────────────────────────────
 
 def show_intro():
