@@ -61,6 +61,7 @@ C_DP1_MAC   = "Desk Phone 1's MAC Address"
 C_DP1_PROV  = "Desk Phone 1's Provision Template"
 
 STATUS_COMPLETE   = "Setup Complete"
+STATUS_SOFTPHONE  = "Softphone"
 STATUS_PROGRESS   = "Setup in Progress"
 STATUS_DISCREP    = "Setup Discrepancy"
 STATUS_INCOMPLETE = "Setup Incomplete"
@@ -81,6 +82,7 @@ MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
 _STATUS_COLORS = {
     STATUS_COMPLETE:   (198, 239, 206),   # green
+    STATUS_SOFTPHONE:  (198, 239, 206),   # green — good to go
     STATUS_PROGRESS:   (255, 235, 156),   # yellow
     STATUS_DISCREP:    (255, 199, 206),   # red/pink
     STATUS_INCOMPLETE: (252, 228, 214),   # light orange
@@ -234,6 +236,24 @@ def _device_compare(d_brand, d_model, d_mac, d_prov,
     return False, False
 
 
+def _is_softphone_match(d_brand, d_model, z_brand, z_model, z_mac):
+    """
+    Returns True if the DGW row is a Softphone user (Brand=Zoom, Model=Softphone)
+    and the CSV shows no device assigned (blank brand, model, and MAC).
+    These users are complete — no physical phone needed.
+    """
+    db = str(d_brand or "").strip().lower()
+    dm = str(d_model or "").strip().lower()
+    if db != "zoom" or dm != "softphone":
+        return False
+    zb = str(z_brand or "").strip()
+    zm = str(z_model or "").strip()
+    zmc = _norm_mac(z_mac)
+    csv_no_device = (not zb and not zm and
+                     (not zmc or zmc.lower() in ("", "na", "n/a")))
+    return csv_no_device
+
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 def _log(msg):
@@ -330,7 +350,7 @@ _ZOOM_TEMPLATE_COLS = [
     "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",
 ]
 
-_UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
+_UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP, STATUS_SOFTPHONE}
 _ADD_STATUSES    = {STATUS_INCOMPLETE}
 
 
@@ -533,7 +553,7 @@ def run_zp_reconciliation():
     _clear_mismatch_highlights(ws, df, headers, compare_cols)
 
     # ── Process each DGW row ──────────────────────────────────────────────────
-    cnt = dict(complete=0, progress=0, discrep=0, incomplete=0)
+    cnt = dict(complete=0, softphone=0, progress=0, discrep=0, incomplete=0)
     total_rows = len(df)
 
     prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...")
@@ -569,12 +589,22 @@ def run_zp_reconciliation():
             phone_match = _phone_equal_na_ok(sheet_val(phone_sh_col), csv_val(C_PHONE))
             out_match   = _phone_equal_na_ok(sheet_val(outbound_sh_col), csv_val(C_OUTBOUND))
 
-            dev_match, dev_discrep = _device_compare(
+            # Softphone check — DGW Brand=Zoom/Model=Softphone + CSV has no device
+            softphone = _is_softphone_match(
                 sheet_val(H_DP1_BRAND), sheet_val(H_DP1_MODEL),
-                sheet_val(H_DP1_MAC),   sheet_val(H_DP1_PROV),
                 csv_val(C_DP1_BRAND),   csv_val(C_DP1_MODEL),
-                csv_val(C_DP1_MAC),     csv_val(C_DP1_PROV),
+                csv_val(C_DP1_MAC),
             )
+
+            if softphone:
+                dev_match, dev_discrep = True, False
+            else:
+                dev_match, dev_discrep = _device_compare(
+                    sheet_val(H_DP1_BRAND), sheet_val(H_DP1_MODEL),
+                    sheet_val(H_DP1_MAC),   sheet_val(H_DP1_PROV),
+                    csv_val(C_DP1_BRAND),   csv_val(C_DP1_MODEL),
+                    csv_val(C_DP1_MAC),     csv_val(C_DP1_PROV),
+                )
 
             all_match = pkg_match and ext_match and phone_match and out_match and dev_match
 
@@ -586,7 +616,13 @@ def run_zp_reconciliation():
             if not dev_match:   mismatches.add(H_DP1_BRAND)
             if dev_discrep:     mismatches.add(H_DP1_MAC)
 
-            if all_match:
+            if all_match and softphone:
+                ws.range((excel_row, d[H_STATUS])).value = STATUS_SOFTPHONE
+                _write(ws, excel_row, headers, CHANGES_HDR, "Softphone")
+                _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
+                _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
+                cnt["softphone"] += 1
+            elif all_match:
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
                 _write(ws, excel_row, headers, CHANGES_HDR, "")
                 _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
@@ -624,6 +660,7 @@ def run_zp_reconciliation():
     # ── Results dialog + optional exports ────────────────────────────────────
     exports = dlg.show_zp_results({
         "complete":   cnt["complete"],
+        "softphone":  cnt["softphone"],
         "discrep":    cnt["discrep"],
         "progress":   cnt["progress"],
         "incomplete": cnt["incomplete"],
