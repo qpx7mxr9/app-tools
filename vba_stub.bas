@@ -100,9 +100,13 @@ Private Sub XRun(code As String)
         SetupMacConf p
         Application.Run "xlwings.RunPython", code
     #Else
-        ' On Windows: inject path directly via sys.path.insert (semicolons are fine)
+        ' On Windows: inject path directly via sys.path.insert (semicolons are fine).
+        ' Replace backslashes with forward slashes so Python does not treat \U, \D etc.
+        ' as unicode/escape sequences inside the string literal.
+        Dim pFwd As String
+        pFwd = Replace(p, "\", "/")
         Application.Run "xlwings.RunPython", _
-            "import sys; sys.path.insert(0, '" & p & "'); " & code
+            "import sys; sys.path.insert(0, '" & pFwd & "'); " & code
     #End If
 End Sub
 
