@@ -13,7 +13,7 @@ Entry points (called from Excel via xlwings RunPython):
 """
 
 import xlwings as xw
-import pandas as pd
+# pandas imported lazily inside functions — keeps startup fast
 from datetime import datetime
 from . import dialogs as dlg
 
@@ -122,6 +122,7 @@ def _get_sheet(wb):
 
 
 def _read_df(ws):
+    import pandas as pd
     data = ws.used_range.value
     if not data or len(data) < 2:
         return pd.DataFrame()
@@ -255,6 +256,7 @@ def export_add():
 # ── Reconciliation logic ──────────────────────────────────────────────────────
 
 def _run_with_csv(wb):
+    import pandas as pd
     _log("_run_with_csv start")
     csv_path = dlg.pick_csv()
     _log(f"csv_path={csv_path}")
@@ -489,6 +491,7 @@ def _run_without_csv(wb):
 
 
 def _export(wb, export_type):
+    import pandas as pd
     _log(f"_export start type={export_type}")
     ws = _get_sheet(wb)
     if ws is None:

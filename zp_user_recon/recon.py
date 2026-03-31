@@ -27,7 +27,7 @@ Entry point (called from Excel via xlwings RunPython):
 """
 
 import xlwings as xw
-import pandas as pd
+# pandas imported lazily inside functions — keeps startup fast
 from datetime import datetime
 from zca_recon import dialogs as dlg
 
@@ -116,6 +116,7 @@ def _get_sheet(wb, name):
 
 
 def _read_df(ws):
+    import pandas as pd
     data = ws.used_range.value
     if not data or len(data) < 2:
         return pd.DataFrame()
@@ -353,6 +354,7 @@ _ADD_STATUSES    = {STATUS_INCOMPLETE}
 
 
 def _export(wb, ws, df, headers, mode, phone_source="temp"):
+    import pandas as pd
     from datetime import date
     import csv
 

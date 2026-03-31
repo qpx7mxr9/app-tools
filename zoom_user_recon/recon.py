@@ -21,7 +21,7 @@ Entry points (called from Excel via xlwings RunPython):
 """
 
 import xlwings as xw
-import pandas as pd
+# pandas imported lazily inside functions — keeps startup fast
 from datetime import datetime
 from zca_recon import dialogs as dlg
 
@@ -72,6 +72,7 @@ def _get_sheet(wb, name):
 
 
 def _read_df(ws):
+    import pandas as pd
     data = ws.used_range.value
     if not data or len(data) < 2:
         return pd.DataFrame()
@@ -110,6 +111,7 @@ def _norm_email(v):
 
 def _load_file(path):
     """Load CSV or Excel file into a DataFrame with stripped column names."""
+    import pandas as pd
     ext = path.rsplit(".", 1)[-1].lower()
     df = pd.read_csv(path, dtype=str) if ext == "csv" else pd.read_excel(path, dtype=str)
     df = df.fillna("")
