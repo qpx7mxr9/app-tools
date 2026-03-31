@@ -310,7 +310,7 @@ def _stamp_dashboard(wb):
                 continue
             for c_idx, cell in enumerate(row):
                 if cell and str(cell).strip() == DASH_LABEL:
-                    dash.range((r_idx + 1, c_idx + 2)).value = now_str
+                    dash.range((r_idx + 1, c_idx + 3)).value = now_str
                     return
 
 
