@@ -283,7 +283,7 @@ def run_zoom_user_audit():
     cnt = dict(active=0, inactive=0, domain=0, pending=0, missing=0)
     total_rows = len(df)
 
-    prog = dlg.ProgressWindow(f"Auditing 0 of {total_rows} users...")
+    prog = dlg.ProgressWindow(f"Auditing 0 of {total_rows} users...", wb=wb)
 
     try:
         for i, (excel_row, row) in enumerate(df.iterrows()):

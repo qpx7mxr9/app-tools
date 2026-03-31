@@ -170,12 +170,33 @@ def _macos_save_dialog(title, default_name):
 
 class ProgressWindow:
     """
-    Small non-closeable status window for long-running operations.
-    Call update(msg) mid-loop — uses update_idletasks() to repaint
-    without processing user events (safe against Tk reentrancy).
-    Works on both Mac and Windows.
+    Progress indicator for long-running operations.
+
+    On Mac: writes directly to Excel's status bar (bottom of the Excel window)
+    via wb.app.status_bar — avoids the Tkinter/AppleScript conflict that
+    causes freezes and beach-ball when both try to call AppKit simultaneously.
+
+    On Windows: shows a small styled Tkinter Toplevel window.
+
+    Pass wb=<xlwings Book> to enable the Mac status-bar path.
     """
-    def __init__(self, message="Working..."):
+    def __init__(self, message="Working...", wb=None):
+        self._mac = _platform.system() == "Darwin"
+        self._xl_app = None
+        self._win = None
+        self._var = None
+
+        if self._mac:
+            # Mac: use Excel status bar — no Tkinter during the loop
+            try:
+                if wb is not None:
+                    self._xl_app = wb.app
+                    self._xl_app.status_bar = message
+            except Exception:
+                pass
+            return
+
+        # Windows: Tkinter progress window
         root = _get_root()
         win = tk.Toplevel(root)
         win.title("CA Reconciliation")
@@ -185,12 +206,10 @@ class ProgressWindow:
         except Exception:
             pass
         _center(win, 340, 72)
-        win.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent close
+        win.protocol("WM_DELETE_WINDOW", lambda: None)
 
         frame = tk.Frame(win, bg="#1F2D4E", padx=24, pady=20)
         frame.pack(fill="both", expand=True)
-        # StringVar triggers a different redraw path on macOS — more reliable
-        # than calling label.config(text=...) which often doesn't visually flush
         self._var = tk.StringVar(value=message)
         self._label = tk.Label(
             frame, textvariable=self._var,
@@ -203,16 +222,24 @@ class ProgressWindow:
 
     def update(self, message):
         try:
-            self._var.set(message)
-            self._win.update_idletasks()
-            self._win.lift()
+            if self._mac:
+                if self._xl_app is not None:
+                    self._xl_app.status_bar = message
+            else:
+                self._var.set(message)
+                self._win.update_idletasks()
+                self._win.lift()
         except Exception:
             pass
 
     def close(self):
         try:
-            self._win.withdraw()
-            self._win.destroy()
+            if self._mac:
+                if self._xl_app is not None:
+                    self._xl_app.status_bar = False  # resets to "Ready"
+            else:
+                self._win.withdraw()
+                self._win.destroy()
         except Exception:
             pass
 

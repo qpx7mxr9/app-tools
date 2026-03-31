@@ -318,7 +318,7 @@ def _run_with_csv(wb):
     total_rows = len(df)
     _log(f"Sheet rows={total_rows}  CSV rows={len(df_csv)}  Headers={headers[:5]}...")
 
-    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...")
+    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...", wb=wb)
 
     def sv(row, col):
         v = row.get(col, "") if col in row.index else ""
