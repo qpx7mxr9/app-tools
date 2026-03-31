@@ -427,6 +427,7 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_zp_reconciliation():
+    import pandas as pd
     open(LOG_PATH, "w").close()
     _log("run_zp_reconciliation start")
 
