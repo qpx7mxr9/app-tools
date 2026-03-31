@@ -10,14 +10,14 @@
 Private Function PyPath() As String
     Dim p As String
 
-    ' ── Windows paths ─────────────────────────────────────────
+    ' ── Windows paths ─────────────────────────────────────
     p = Environ("USERPROFILE") & "\app-tools"
     If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
 
     p = Environ("USERPROFILE") & "\Documents\GitHub\app-tools"
     If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
 
-    ' ── Mac paths ─────────────────────────────────────────────
+    ' ── Mac paths ─────────────────────────────────────────
     p = Environ("HOME") & "/app-tools"
     If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
 
@@ -30,47 +30,54 @@ Private Function PyPath() As String
     PyPath = ""
 End Function
 
-Private Sub RunTool(code As String)
-    Dim p As String
-    p = PyPath()
-    If p = "" Then Exit Sub
-    ' Normalize path separator for cross-platform
-    p = Replace(p, "\", "/")
-    RunPython "import sys, os; sys.path.insert(0, '" & p & "'); " & code
-End Sub
-
 ' ── Dashboard ─────────────────────────────────────────────
 Sub Dashboard_Build()
-    RunTool "import dashboard; dashboard.build_dashboard()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import dashboard; dashboard.build_dashboard()"
 End Sub
 
 Sub Dashboard_Refresh()
-    RunTool "import dashboard; dashboard.refresh_ca_block()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import dashboard; dashboard.refresh_ca_block()"
 End Sub
 
 ' ── Common Areas ──────────────────────────────────────────
 Sub ZCA_RunReconciliation()
-    RunTool "import zca_recon; zca_recon.run_reconciliation()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.run_reconciliation()"
 End Sub
 
 Sub ZCA_ExportUpdate()
-    RunTool "import zca_recon; zca_recon.export_update()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.export_update()"
 End Sub
 
 Sub ZCA_ExportAdd()
-    RunTool "import zca_recon; zca_recon.export_add()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.export_add()"
 End Sub
 
 ' ── Zoom User Recon ───────────────────────────────────────
 Sub ZUR_RunAudit()
-    RunTool "import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
 End Sub
 
 Sub ZUR_ClearResults()
-    RunTool "import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
 End Sub
 
 ' ── ZP User Recon ─────────────────────────────────────────
 Sub ZPU_RunReconciliation()
-    RunTool "import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
+    Dim p As String : p = Replace(PyPath(), "\", "/")
+    If p = "" Then Exit Sub
+    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
 End Sub
