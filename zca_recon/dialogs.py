@@ -303,7 +303,7 @@ def show_zp_results(counts):
     win.resizable(False, False)
     try: win.attributes("-topmost", True)
     except Exception: pass
-    _center(win, 480, 320)
+    _center(win, 400, 370)
 
     _make_header(win, "ZP RECONCILIATION COMPLETE")
 
@@ -416,7 +416,7 @@ def show_zu_results(counts, has_pending=False):
     win.resizable(False, False)
     try: win.attributes("-topmost", True)
     except Exception: pass
-    _center(win, 460, 320 if has_pending else 290)
+    _center(win, 400, 330 if has_pending else 300)
 
     _make_header(win, "ZOOM USER AUDIT COMPLETE")
 
@@ -543,7 +543,7 @@ def show_results(counts):
         win.attributes("-topmost", True)
     except Exception:
         pass
-    _center(win, 480, 340)
+    _center(win, 400, 370)
 
     # Header
     header = tk.Frame(win, bg="#1F2D4E", height=48)
