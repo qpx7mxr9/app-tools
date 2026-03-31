@@ -18,9 +18,9 @@ Private Function FolderExists(p As String) As Boolean
 End Function
 
 Private Function RealHome() As String
+    ' Returns the real user home, bypassing Mac App Store sandbox container path
     Dim h As String
     h = Environ("HOME")
-    ' Excel (App Store) runs sandboxed — HOME points to container, not real home
     If InStr(h, "/Library/Containers/") > 0 Or h = "" Then
         h = "/Users/" & Environ("USER")
     End If
@@ -55,17 +55,55 @@ Private Function PyPath() As String
     PyPath = ""
 End Function
 
+Private Sub SetupMacConf(p As String)
+    ' Write a clean xlwings.conf to Excel's container HOME (Environ("HOME") on Mac).
+    ' xlwings reads from this exact path on Mac via GetMacDir("$HOME", False).
+    ' This fixes the "EOL while scanning string literal" error caused by a trailing
+    ' newline that gets embedded inside the AppleScript shell command quotes.
+    Dim confPath As String
+    confPath = Environ("HOME") & "/xlwings.conf"
+
+    ' Preserve INTERPRETER_MAC if already set
+    Dim interpLine As String
+    interpLine = ""
+    Dim fileNum As Integer
+    If Dir(confPath) <> "" Then
+        Dim oneLine As String
+        fileNum = FreeFile
+        Open confPath For Input As #fileNum
+        Do While Not EOF(fileNum)
+            Line Input #fileNum, oneLine
+            If InStr(LCase(oneLine), "interpreter_mac") > 0 Then
+                interpLine = oneLine
+            End If
+        Loop
+        Close #fileNum
+    End If
+
+    ' Write clean file — Print # adds exactly one newline, no trailing garbage
+    fileNum = FreeFile
+    Open confPath For Output As #fileNum
+    If interpLine <> "" Then Print #fileNum, interpLine
+    Print #fileNum, """PYTHONPATH"",""" & p & """"
+    Close #fileNum
+End Sub
+
 Private Sub XRun(code As String)
     Dim p As String
     p = PyPath()
     If p = "" Then Exit Sub
-    ' Use Chr(10) newlines — NOT semicolons — to separate Python statements.
-    ' On Mac, xlwings uses semicolons as internal delimiters so semicolons
-    ' in the code string corrupt the prepare_sys_path() call.
-    Application.Run "xlwings.RunPython", _
-        "import sys" & Chr(10) & _
-        "sys.path.insert(0, '" & p & "')" & Chr(10) & _
-        code
+
+    #If Mac Then
+        ' On Mac: write clean xlwings.conf so xlwings injects PYTHONPATH itself.
+        ' Cannot use semicolons in the code string — xlwings uses them as internal
+        ' delimiters and they corrupt the AppleScript shell command quoting.
+        SetupMacConf p
+        Application.Run "xlwings.RunPython", code
+    #Else
+        ' On Windows: inject path directly via sys.path.insert (semicolons are fine)
+        Application.Run "xlwings.RunPython", _
+            "import sys; sys.path.insert(0, '" & p & "'); " & code
+    #End If
 End Sub
 
 ' -- Dashboard ---------------------------------------------
