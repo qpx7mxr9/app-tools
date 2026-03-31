@@ -13,8 +13,12 @@ second tk.Tk() is created after the first has been destroyed.
 
 import sys as _sys
 import os as _os
+import platform as _platform
 import tkinter as tk
 from tkinter import filedialog
+
+# Mac doesn't have Segoe UI — use Helvetica Neue which is visually similar
+_FONT = _FONT if _platform.system() == "Windows" else "Helvetica Neue"
 
 # On Mac, permanently redirect raw fd 2 to /dev/null for this xlwings
 # subprocess.  macOS Tk 8.5 writes Objective-C warnings directly to fd 2
@@ -185,20 +189,23 @@ class ProgressWindow:
 
         frame = tk.Frame(win, bg="#1F2D4E", padx=24, pady=20)
         frame.pack(fill="both", expand=True)
+        # StringVar triggers a different redraw path on macOS — more reliable
+        # than calling label.config(text=...) which often doesn't visually flush
+        self._var = tk.StringVar(value=message)
         self._label = tk.Label(
-            frame, text=message,
+            frame, textvariable=self._var,
             bg="#1F2D4E", fg="white",
-            font=("Segoe UI", 10))
+            font=(_FONT, 10))
         self._label.pack()
         self._win = win
-        win.update()
+        win.update_idletasks()
+        win.lift()
 
     def update(self, message):
         try:
-            self._label.config(text=message)
-            # update() instead of update_idletasks() — forces a real repaint on macOS
-            # where update_idletasks() alone does not flush the draw queue mid-loop
-            self._win.update()
+            self._var.set(message)
+            self._win.update_idletasks()
+            self._win.lift()   # keep it on top of Excel on Mac
         except Exception:
             pass
 
@@ -216,7 +223,7 @@ def _make_header(win, text):
     h.pack(fill="x")
     h.pack_propagate(False)
     tk.Label(h, text=text, bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, anchor="center")
+             font=(_FONT, 12, "bold")).pack(side="left", padx=18, anchor="center")
 
 def _make_body(win):
     b = tk.Frame(win, bg="white", padx=20, pady=14)
@@ -229,25 +236,31 @@ def _make_btn_frame(win):
     return f
 
 def _add_cancel_btn(frame, cmd, text="Cancel"):
-    tk.Button(frame, text=text, bg="#D8D8D8", fg="#333",
-              font=("Segoe UI", 10), width=10, relief="flat",
-              highlightbackground="#D8D8D8",
-              cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
+    is_mac = _platform.system() == "Darwin"
+    btn = tk.Button(frame, text=text, bg="#D8D8D8", fg="#333",
+                    font=(_FONT, 10), width=10,
+                    relief="flat" if not is_mac else "groove",
+                    highlightbackground="#D8D8D8",
+                    cursor="hand2", command=cmd)
+    btn.pack(side="right", padx=(4, 0))
 
 def _add_primary_btn(frame, cmd, text="Continue ->", width=13):
-    tk.Button(frame, text=text, bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 10, "bold"), width=width, relief="flat",
-              highlightbackground="#1F2D4E",
-              cursor="hand2", command=cmd).pack(side="right", padx=(4, 0))
+    is_mac = _platform.system() == "Darwin"
+    btn = tk.Button(frame, text=text, bg="#1F2D4E", fg="white",
+                    font=(_FONT, 10, "bold"), width=width,
+                    relief="flat" if not is_mac else "groove",
+                    highlightbackground="#1F2D4E",
+                    cursor="hand2", command=cmd)
+    btn.pack(side="right", padx=(4, 0))
 
 def _stat_row(parent, label, value, fg, bg, label_width=20):
     row = tk.Frame(parent, bg="white")
     row.pack(fill="x", pady=2)
     tk.Label(row, text=f"  {label}:", bg="white",
-             font=("Segoe UI", 10), fg="#555",
+             font=(_FONT, 10), fg="#555",
              width=label_width, anchor="w").pack(side="left")
     tk.Label(row, text=str(value), bg=bg, fg=fg,
-             font=("Segoe UI", 10, "bold"),
+             font=(_FONT, 10, "bold"),
              width=6, relief="flat").pack(side="left")
 
 
@@ -268,18 +281,18 @@ def show_zp_intro():
     body = _make_body(win)
 
     tk.Label(body, text="What you will need:",
-             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+             bg="white", font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w")
     tk.Label(body,
              text="  \u2022  Zoom Phone Users CSV\n"
                   "     (Admin Portal \u2192 Phone \u2192 Users \u2192 Export)",
-             bg="white", font=("Segoe UI", 9), fg="#555",
+             bg="white", font=(_FONT, 9), fg="#555",
              justify="left").pack(anchor="w", pady=(2, 10))
     tk.Label(body, text="After reconciling you can export:",
-             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+             bg="white", font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w")
     tk.Label(body,
              text="  \u2022  UPDATE file \u2013 in Zoom Phone but data doesn\u2019t match\n"
                   "  \u2022  ADD file \u2013 not yet in Zoom Phone",
-             bg="white", font=("Segoe UI", 9), fg="#555",
+             bg="white", font=(_FONT, 9), fg="#555",
              justify="left").pack(anchor="w", pady=(2, 0))
 
     bf = _make_btn_frame(win)
@@ -323,17 +336,17 @@ def show_zp_results(counts):
     exp = tk.Frame(win, bg="white", padx=20, pady=12)
     exp.pack(fill="x")
     tk.Label(exp, text="Select exports:", bg="white",
-             font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 6))
+             font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 6))
 
     var_upd = tk.BooleanVar(value=counts.get("discrep", 0) > 0 or counts.get("progress", 0) > 0)
     var_add = tk.BooleanVar(value=counts.get("incomplete", 0) > 0)
     tk.Checkbutton(exp, text="UPDATE file  (Discrepancy / In Progress)",
                    variable=var_upd, bg="white",
-                   font=("Segoe UI", 10), fg="#333",
+                   font=(_FONT, 10), fg="#333",
                    activebackground="white").pack(anchor="w")
     tk.Checkbutton(exp, text="ADD file  (Setup Incomplete \u2013 not in Zoom Phone)",
                    variable=var_add, bg="white",
-                   font=("Segoe UI", 10), fg="#333",
+                   font=(_FONT, 10), fg="#333",
                    activebackground="white").pack(anchor="w", pady=(4, 0))
 
     bf = _make_btn_frame(win)
@@ -372,27 +385,27 @@ def show_zu_intro():
     body = _make_body(win)
 
     tk.Label(body, text="Required:",
-             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+             bg="white", font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w")
     tk.Label(body,
              text="  \u2022  Zoom Users Export\n"
                   "     (Admin Portal \u2192 User Management \u2192 Users \u2192 Export)",
-             bg="white", font=("Segoe UI", 9), fg="#555",
+             bg="white", font=(_FONT, 9), fg="#555",
              justify="left").pack(anchor="w", pady=(2, 10))
 
     tk.Label(body, text="Optional \u2014 check to include:",
-             bg="white", font=("Segoe UI", 10, "bold"), fg="#333").pack(anchor="w")
+             bg="white", font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w")
 
     var_domain  = tk.BooleanVar(value=False)
     var_pending = tk.BooleanVar(value=False)
     tk.Checkbutton(body,
                    text="Domain Data  (Email | Account Type | Zoom Acct Number)",
                    variable=var_domain, bg="white",
-                   font=("Segoe UI", 9), fg="#555",
+                   font=(_FONT, 9), fg="#555",
                    activebackground="white").pack(anchor="w", pady=(4, 0))
     tk.Checkbutton(body,
                    text="Pending Users  (Email \u2014 users awaiting activation)",
                    variable=var_pending, bg="white",
-                   font=("Segoe UI", 9), fg="#555",
+                   font=(_FONT, 9), fg="#555",
                    activebackground="white").pack(anchor="w", pady=(4, 0))
 
     bf = _make_btn_frame(win)
@@ -437,7 +450,7 @@ def show_zu_results(counts, has_pending=False):
 
     def on_done(): win.destroy()
     tk.Button(bf, text="Done", bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 10, "bold"), width=10, relief="flat",
+              font=(_FONT, 10, "bold"), width=10, relief="flat",
               cursor="hand2", command=on_done).pack(side="right")
     win.protocol("WM_DELETE_WINDOW", on_done)
     win.lift(); win.focus_force()
@@ -469,28 +482,28 @@ def show_intro():
     header.pack_propagate(False)
     tk.Label(header, text="COMMON AREA RECONCILIATION",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, anchor="center")
+             font=(_FONT, 12, "bold")).pack(side="left", padx=18, anchor="center")
 
     # Body
     body = tk.Frame(win, bg="white", padx=20, pady=14)
     body.pack(fill="both", expand=True)
 
     tk.Label(body, text="What you will need:",
-             bg="white", font=("Segoe UI", 10, "bold"),
+             bg="white", font=(_FONT, 10, "bold"),
              fg="#333").pack(anchor="w")
     tk.Label(body,
              text="  \u2022  Source export CSV\n"
                   "     (Admin Portal > Phone > Common Area Phones > Export)",
-             bg="white", font=("Segoe UI", 9), fg="#555",
+             bg="white", font=(_FONT, 9), fg="#555",
              justify="left").pack(anchor="w", pady=(2, 10))
 
     tk.Label(body, text="After reconciling you can export:",
-             bg="white", font=("Segoe UI", 10, "bold"),
+             bg="white", font=(_FONT, 10, "bold"),
              fg="#333").pack(anchor="w")
     tk.Label(body,
              text="  \u2022  UPDATE file -- exists in source but data doesn't match\n"
                   "  \u2022  ADD file -- not yet in source system",
-             bg="white", font=("Segoe UI", 9), fg="#555",
+             bg="white", font=(_FONT, 9), fg="#555",
              justify="left").pack(anchor="w", pady=(2, 0))
 
     # Buttons
@@ -510,15 +523,15 @@ def show_intro():
 
     tk.Button(btn_frame, text="Cancel",
               bg="#D8D8D8", fg="#333",
-              font=("Segoe UI", 10), width=10, relief="flat", cursor="hand2",
+              font=(_FONT, 10), width=10, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Skip Import ->",
               bg="#607D9F", fg="white",
-              font=("Segoe UI", 10), width=13, relief="flat", cursor="hand2",
+              font=(_FONT, 10), width=13, relief="flat", cursor="hand2",
               command=on_skip).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Import CSV ->",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 10, "bold"), width=13, relief="flat", cursor="hand2",
+              font=(_FONT, 10, "bold"), width=13, relief="flat", cursor="hand2",
               command=on_import).pack(side="right", padx=(4, 0))
 
     win.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -555,7 +568,7 @@ def show_results(counts):
     header.pack_propagate(False)
     tk.Label(header, text="RECONCILIATION COMPLETE",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 12, "bold")).pack(side="left", padx=18, anchor="center")
+             font=(_FONT, 12, "bold")).pack(side="left", padx=18, anchor="center")
 
     # Stats
     stats_frame = tk.Frame(win, bg="white", padx=20, pady=14)
@@ -572,10 +585,10 @@ def show_results(counts):
         row = tk.Frame(stats_frame, bg="white")
         row.pack(fill="x", pady=2)
         tk.Label(row, text=f"  {label}:", bg="white",
-                 font=("Segoe UI", 10), fg="#555", width=16,
+                 font=(_FONT, 10), fg="#555", width=16,
                  anchor="w").pack(side="left")
         tk.Label(row, text=str(value), bg=bg, fg=fg,
-                 font=("Segoe UI", 10, "bold"),
+                 font=(_FONT, 10, "bold"),
                  width=6, relief="flat").pack(side="left")
 
     # Divider
@@ -586,7 +599,7 @@ def show_results(counts):
     export_frame.pack(fill="x")
 
     tk.Label(export_frame, text="Select exports:",
-             bg="white", font=("Segoe UI", 10, "bold"),
+             bg="white", font=(_FONT, 10, "bold"),
              fg="#333").pack(anchor="w", pady=(0, 6))
 
     var_update = tk.BooleanVar(value=counts.get("disc", 0) > 0 or counts.get("progress", 0) > 0)
@@ -595,12 +608,12 @@ def show_results(counts):
     tk.Checkbutton(export_frame,
                    text="UPDATE file  (Discrepancy / In Progress)",
                    variable=var_update,
-                   bg="white", font=("Segoe UI", 10), fg="#333",
+                   bg="white", font=(_FONT, 10), fg="#333",
                    activebackground="white").pack(anchor="w")
     tk.Checkbutton(export_frame,
                    text="ADD file  (Not in source system yet)",
                    variable=var_add,
-                   bg="white", font=("Segoe UI", 10), fg="#333",
+                   bg="white", font=(_FONT, 10), fg="#333",
                    activebackground="white").pack(anchor="w", pady=(4, 0))
 
     # Buttons
@@ -618,11 +631,11 @@ def show_results(counts):
 
     tk.Button(btn_frame, text="Skip Exports",
               bg="#D8D8D8", fg="#333",
-              font=("Segoe UI", 10), width=12, relief="flat", cursor="hand2",
+              font=(_FONT, 10), width=12, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Export Selected ->",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 10, "bold"), width=16, relief="flat", cursor="hand2",
+              font=(_FONT, 10, "bold"), width=16, relief="flat", cursor="hand2",
               command=on_done).pack(side="right", padx=(4, 0))
 
     win.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -657,7 +670,7 @@ def ask_phone_source():
     header.pack_propagate(False)
     tk.Label(header, text="SELECT PHONE NUMBER SOURCE",
              bg="#1F2D4E", fg="white",
-             font=("Segoe UI", 10, "bold")).pack(side="left", padx=16, anchor="center")
+             font=(_FONT, 10, "bold")).pack(side="left", padx=16, anchor="center")
 
     body = tk.Frame(win, bg="white", padx=22, pady=14)
     body.pack(fill="both", expand=True)
@@ -665,10 +678,10 @@ def ask_phone_source():
     var = tk.StringVar(value="temp")
     tk.Radiobutton(body, text="Zoom Temp Numbers",
                    variable=var, value="temp",
-                   bg="white", font=("Segoe UI", 10)).pack(anchor="w")
+                   bg="white", font=(_FONT, 10)).pack(anchor="w")
     tk.Radiobutton(body, text="Actual Numbers",
                    variable=var, value="actual",
-                   bg="white", font=("Segoe UI", 10)).pack(anchor="w", pady=(6, 0))
+                   bg="white", font=(_FONT, 10)).pack(anchor="w", pady=(6, 0))
 
     btn_frame = tk.Frame(win, bg="#F0F0F0", padx=14, pady=10)
     btn_frame.pack(fill="x")
@@ -682,11 +695,11 @@ def ask_phone_source():
 
     tk.Button(btn_frame, text="Cancel",
               bg="#D8D8D8", fg="#333",
-              font=("Segoe UI", 10), width=10, relief="flat", cursor="hand2",
+              font=(_FONT, 10), width=10, relief="flat", cursor="hand2",
               command=on_cancel).pack(side="right", padx=(4, 0))
     tk.Button(btn_frame, text="Continue ->",
               bg="#1F2D4E", fg="white",
-              font=("Segoe UI", 10, "bold"), width=12, relief="flat", cursor="hand2",
+              font=(_FONT, 10, "bold"), width=12, relief="flat", cursor="hand2",
               command=on_ok).pack(side="right", padx=(4, 0))
 
     win.protocol("WM_DELETE_WINDOW", on_cancel)
