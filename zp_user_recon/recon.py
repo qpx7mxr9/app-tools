@@ -65,6 +65,8 @@ STATUS_PROGRESS   = "Setup in Progress"
 STATUS_DISCREP    = "Setup Discrepancy"
 STATUS_INCOMPLETE = "Setup Incomplete"
 
+H_ZP_PACKAGE = "ZP User Package"   # written on Setup Complete with CSV package value
+
 BRAND_WORKPLACE_APP = "workplace app"
 
 # Actual (non-temp) phone columns on the sheet
@@ -581,6 +583,7 @@ def run_zp_reconciliation():
             if all_match:
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
                 _write(ws, excel_row, headers, CHANGES_HDR, "")
+                _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
                 _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
                 cnt["complete"] += 1
             elif dev_discrep:
