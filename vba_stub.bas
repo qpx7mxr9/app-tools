@@ -30,54 +30,46 @@ Private Function PyPath() As String
     PyPath = ""
 End Function
 
-' ── Dashboard ─────────────────────────────────────────────
-Sub Dashboard_Build()
+Private Sub XRun(code As String)
     Dim p As String : p = Replace(PyPath(), "\", "/")
     If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import dashboard; dashboard.build_dashboard()"
+    Dim full As String
+    full = "import sys; sys.path.insert(0, '" & p & "'); " & code
+    Application.Run "xlwings.RunPython", full
+End Sub
+
+' ── Dashboard ─────────────────────────────────────────────
+Sub Dashboard_Build()
+    XRun "import dashboard; dashboard.build_dashboard()"
 End Sub
 
 Sub Dashboard_Refresh()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import dashboard; dashboard.refresh_ca_block()"
+    XRun "import dashboard; dashboard.refresh_ca_block()"
 End Sub
 
 ' ── Common Areas ──────────────────────────────────────────
 Sub ZCA_RunReconciliation()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.run_reconciliation()"
+    XRun "import zca_recon; zca_recon.run_reconciliation()"
 End Sub
 
 Sub ZCA_ExportUpdate()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.export_update()"
+    XRun "import zca_recon; zca_recon.export_update()"
 End Sub
 
 Sub ZCA_ExportAdd()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zca_recon; zca_recon.export_add()"
+    XRun "import zca_recon; zca_recon.export_add()"
 End Sub
 
 ' ── Zoom User Recon ───────────────────────────────────────
 Sub ZUR_RunAudit()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
+    XRun "from zoom_user_recon.recon import run_zoom_user_audit; run_zoom_user_audit()"
 End Sub
 
 Sub ZUR_ClearResults()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
+    XRun "from zoom_user_recon.recon import clear_zoom_results; clear_zoom_results()"
 End Sub
 
 ' ── ZP User Recon ─────────────────────────────────────────
 Sub ZPU_RunReconciliation()
-    Dim p As String : p = Replace(PyPath(), "\", "/")
-    If p = "" Then Exit Sub
-    RunPython "import sys; sys.path.insert(0, '" & p & "'); import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
+    XRun "from zp_user_recon.recon import run_zp_reconciliation; run_zp_reconciliation()"
 End Sub
