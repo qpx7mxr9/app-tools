@@ -40,9 +40,9 @@ COMPARE_COLS = [
 
 MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
-# ── Export column map ─────────────────────────────────────────────────────────
-EXPORT_COLS = [
-    ("Current Extension Number",              "Extension Number"),  # col 0
+# ── Export column maps ────────────────────────────────────────────────────────
+# Phone Number / Outbound Caller ID use None as src — resolved at export time
+_BASE_EXPORT_COLS = [
     ("Display Name",                          "Display Name"),
     ("Package",                               PKG_HDR),
     ("Site Name",                             "Site Name"),
@@ -52,8 +52,8 @@ EXPORT_COLS = [
     ("Department",                            "Department"),
     ("Cost Center",                           "Cost Center"),
     ("Extension Number",                      "Extension Number"),
-    ("Phone Number",                          None),   # resolved at export time — index 10
-    ("Outbound Caller ID",                    None),   # resolved at export time — index 11
+    ("Phone Number",                          None),
+    ("Outbound Caller ID",                    None),
     ("Select Outbound Caller ID",             "Select Outbound Caller ID"),
     (f"Desk Phone 1{AP}s Brand",              f"Desk Phone 1{AP}s Brand"),
     (f"Desk Phone 1{AP}s Model",              f"Desk Phone 1{AP}s Model"),
@@ -68,6 +68,10 @@ EXPORT_COLS = [
     (f"Desk Phone 3{AP}s MAC Address",        f"Desk Phone 3{AP}s MAC Address"),
     (f"Desk Phone 3{AP}s Provision Template", f"Desk Phone 3{AP}s Provision Template"),
 ]
+
+# UPDATE template starts with Current Extension Number; ADD does not
+_UPDATE_EXPORT_COLS = [("Current Extension Number", "Extension Number")] + _BASE_EXPORT_COLS
+_ADD_EXPORT_COLS    = list(_BASE_EXPORT_COLS)
 
 
 # ── Workbook resolver ─────────────────────────────────────────────────────────
@@ -513,9 +517,15 @@ def _export(wb, export_type):
     if not save_path:
         return
 
-    cols = list(EXPORT_COLS)
-    cols[10] = ("Phone Number",       "Phone Number (Zoom Temp)" if use_temp else "Phone Number")
-    cols[11] = ("Outbound Caller ID", "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID")
+    phone_src   = "Phone Number (Zoom Temp)"       if use_temp else "Phone Number"
+    outbound_src = "Outbound Caller ID (Zoom Temp)" if use_temp else "Outbound Caller ID"
+    base = _UPDATE_EXPORT_COLS if export_type == "update" else _ADD_EXPORT_COLS
+    cols = [
+        (hdr, phone_src   if src is None and hdr == "Phone Number"       else
+              outbound_src if src is None and hdr == "Outbound Caller ID" else
+              src)
+        for hdr, src in base
+    ]
 
     s = df[STATUS_HDR].astype(str).str.strip()
 
