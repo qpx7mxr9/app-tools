@@ -9,45 +9,68 @@
 
 Private Function PyPath() As String
     Dim p As String
-    p = Environ("HOME") & "/AppTools/app-tools"
-    If Dir(p, vbDirectory) = "" Then
-        p = Environ("HOME") & "/Documents/GitHub/app-tools"
-    End If
-    PyPath = p
+
+    ' ── Windows paths ─────────────────────────────────────────
+    p = Environ("USERPROFILE") & "\app-tools"
+    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+
+    p = Environ("USERPROFILE") & "\Documents\GitHub\app-tools"
+    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+
+    ' ── Mac paths ─────────────────────────────────────────────
+    p = Environ("HOME") & "/app-tools"
+    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+
+    p = Environ("HOME") & "/Documents/GitHub/app-tools"
+    If Dir(p, vbDirectory) <> "" Then PyPath = p : Exit Function
+
+    MsgBox "Could not find app-tools folder. " & vbCrLf & _
+           "Expected: " & Environ("USERPROFILE") & "\app-tools", _
+           vbExclamation, "App Tools"
+    PyPath = ""
 End Function
 
-' ── CA Tools Dashboard ────────────────────────────────────
+Private Sub RunTool(code As String)
+    Dim p As String
+    p = PyPath()
+    If p = "" Then Exit Sub
+    ' Normalize path separator for cross-platform
+    p = Replace(p, "\", "/")
+    RunPython "import sys, os; sys.path.insert(0, '" & p & "'); " & code
+End Sub
+
+' ── Dashboard ─────────────────────────────────────────────
 Sub Dashboard_Build()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import dashboard; dashboard.build_dashboard()"
+    RunTool "import dashboard; dashboard.build_dashboard()"
 End Sub
 
 Sub Dashboard_Refresh()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import dashboard; dashboard.refresh_ca_block()"
+    RunTool "import dashboard; dashboard.refresh_ca_block()"
 End Sub
 
-' ── Common Areas ─────────────────────────────────────────
+' ── Common Areas ──────────────────────────────────────────
 Sub ZCA_RunReconciliation()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.run_reconciliation()"
+    RunTool "import zca_recon; zca_recon.run_reconciliation()"
 End Sub
 
 Sub ZCA_ExportUpdate()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.export_update()"
+    RunTool "import zca_recon; zca_recon.export_update()"
 End Sub
 
 Sub ZCA_ExportAdd()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zca_recon; zca_recon.export_add()"
+    RunTool "import zca_recon; zca_recon.export_add()"
 End Sub
 
-' ── Zoom User Recon ──────────────────────────────────────
+' ── Zoom User Recon ───────────────────────────────────────
 Sub ZUR_RunAudit()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
+    RunTool "import zoom_user_recon; zoom_user_recon.run_zoom_user_audit()"
 End Sub
 
 Sub ZUR_ClearResults()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
+    RunTool "import zoom_user_recon; zoom_user_recon.clear_zoom_results()"
 End Sub
 
 ' ── ZP User Recon ─────────────────────────────────────────
 Sub ZPU_RunReconciliation()
-    RunPython "import sys, os; sys.path.insert(0, os.path.expanduser('~/Documents/GitHub/app-tools')); import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
+    RunTool "import zp_user_recon; zp_user_recon.run_zp_reconciliation()"
 End Sub
