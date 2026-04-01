@@ -79,6 +79,16 @@ CHANGES_HDR    = "ZP Changes"
 DASH_LABEL     = "ZP Recon Last Update:"
 MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
+# Zoom User Status column (written by the ZU recon)
+# Users with these statuses are skipped from ZP exports —
+# they can't be set up in Zoom Phone if they aren't active in Zoom.
+H_ZU_STATUS = "Zoom User Status"
+_ZP_EXPORT_SKIP_ZU_STATUSES = {
+    "pending activation",
+    "not found",
+    "inactive - in account",
+}
+
 # (background RGB, font RGB)
 _STATUS_COLORS = {
     STATUS_COMPLETE:   ((198, 239, 206), (0,   97,  0)),    # green
@@ -408,6 +418,11 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
         # Skip rows where TCS Data Status = "Removed"
         tcs_status = str(row.get(H_TCS_DATA_STATUS, "") or "").strip().lower()
         if tcs_status == "removed":
+            continue
+        # Skip users who are not active in Zoom (Pending, Not Found, Inactive)
+        zu_status = str(row.get(H_ZU_STATUS, "") or "").strip().lower()
+        if zu_status in _ZP_EXPORT_SKIP_ZU_STATUSES:
+            _log(f"export skip (ZU status='{zu_status}'): {row.get(H_EMAIL, '')}")
             continue
         out = {}
         for col in export_cols:
