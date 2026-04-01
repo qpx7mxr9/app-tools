@@ -167,6 +167,58 @@ def _log(msg):
         pass
 
 
+# ── ADD export ───────────────────────────────────────────────────────────────
+
+# Columns match the Zoom add-users CSV template exactly
+_ZU_ADD_COLS = [
+    "Email", "First Name", "Last Name", "Department",
+    "Manager", "User Groups", "Job Title", "Location", "Cost Center",
+]
+
+def _export_add(wb, ws, df, headers):
+    """Export users with Zoom User Status = 'Not Found' to the Zoom add-users template."""
+    import csv
+    from datetime import date
+
+    if COL_STATUS not in headers:
+        dlg.info("Export Error", f"'{COL_STATUS}' column not found.")
+        return
+
+    rows = []
+    for _, row in df.iterrows():
+        status = str(row.get(COL_STATUS, "") or "").strip()
+        if status != "Not Found":
+            continue
+        out = {}
+        for col in _ZU_ADD_COLS:
+            # Direct name match — blank if column not on sheet
+            out[col] = str(row.get(col, "") or "").strip()
+        rows.append(out)
+
+    _log(f"ZU ADD export: {len(rows)} Not Found rows")
+
+    if not rows:
+        dlg.info("Export", "No 'Not Found' users to export.")
+        return
+
+    suggested = f"ZU_Add_{date.today().strftime('%Y%m%d')}.csv"
+    save_path = dlg.get_save_path(suggested, "Save ZU Add CSV")
+    if not save_path:
+        return
+
+    try:
+        with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=_ZU_ADD_COLS)
+            writer.writeheader()
+            writer.writerows(rows)
+        dlg.info("Export Complete",
+                 f"ADD export saved:\n{save_path}\n\n{len(rows)} users.")
+        _log(f"ZU ADD export saved: {save_path}")
+    except Exception as e:
+        dlg.info("Export Error", str(e))
+        _log(f"ZU ADD export error: {e}")
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_zoom_user_audit():
@@ -369,38 +421,12 @@ def run_zoom_user_audit():
     _stamp_dashboard(wb)
     prog.close()
 
-    # ── Summary ───────────────────────────────────────────────────────────────
-    total = sum(cnt.values())
-    lines = [
-        "AUDIT COMPLETE",
-        "",
-        f"{total} users processed:",
-        "",
-        f"  Active \u2013 In Account:    {cnt['active']}",
-        f"  Inactive \u2013 In Account:  {cnt['inactive']}",
-        f"  Not In Account:         {cnt['domain']}",
-    ]
-    if df_pending is not None:
-        lines.append(f"  Pending Activation:     {cnt['pending']}")
-    lines += [
-        f"  Not Found:              {cnt['missing']}",
-        "",
-        "COLOR KEY:",
-        "  Green  \u2013 Active in Zoom account",
-        "  Yellow \u2013 Inactive in Zoom account",
-        "  Red    \u2013 Not in Zoom account (see External Info)",
-    ]
-    if df_pending is not None:
-        lines.append("  Blue   \u2013 Pending account activation")
-    lines.append("  Gray   \u2013 Not found in any source")
-    if cnt["domain"] > 0:
-        lines += [
-            "",
-            f"Note: {cnt['domain']} user(s) marked Not In Account need a",
-            "Zoom license before Zoom Phone can be assigned.",
-        ]
-
-    dlg.show_zu_results(cnt, has_pending=df_pending is not None)
+    # ── Results dialog + optional ADD export ─────────────────────────────────
+    df_fresh  = _read_df(ws)
+    headers_f = list(df_fresh.columns)
+    exports = dlg.show_zu_results(cnt, has_pending=df_pending is not None)
+    if "add" in exports:
+        _export_add(wb, ws, df_fresh, headers_f)
 
 
 # ── Clear results entry point ─────────────────────────────────────────────────

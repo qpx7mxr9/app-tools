@@ -454,19 +454,30 @@ def show_zu_intro():
 
 
 def show_zu_results(counts, has_pending=False):
-    """ZU results dialog. counts = {"active", "inactive", "domain", "pending", "missing"}."""
+    """
+    ZU results dialog. Returns set of {"add"} for exports selected.
+    counts = {"active", "inactive", "domain", "pending", "missing"}
+    """
+    result = {"exports": set()}
+    has_missing = counts.get("missing", 0) > 0
+
     root = _get_root(); _focus_python()
     win = tk.Toplevel(root)
     win.title("Zoom User Audit Complete")
     win.resizable(False, False)
     try: win.attributes("-topmost", True)
     except Exception: pass
-    _center(win, 400, 330 if has_pending else 300)
+
+    # Taller if pending row shown and/or export section shown
+    h = 300
+    if has_pending: h += 28
+    if has_missing: h += 70
+    _center(win, 400, h)
 
     _make_header(win, "ZOOM USER AUDIT COMPLETE")
 
     stats = tk.Frame(win, bg="white", padx=20, pady=14)
-    stats.pack(fill="both", expand=True)
+    stats.pack(fill="x")
     _stat_row(stats, "Active \u2013 In Account",   counts.get("active",   0), "#00612A", "#C6EFCE", 24)
     _stat_row(stats, "Inactive \u2013 In Account", counts.get("inactive", 0), "#9C6400", "#FFEB9C", 24)
     _stat_row(stats, "Not In Account",             counts.get("domain",   0), "#9C0006", "#FFC7CE", 24)
@@ -474,15 +485,41 @@ def show_zu_results(counts, has_pending=False):
         _stat_row(stats, "Pending Activation",     counts.get("pending",  0), "#1F497D", "#DCE6F1", 24)
     _stat_row(stats, "Not Found",                  counts.get("missing",  0), "#666666", "#F2F2F2", 24)
 
+    if has_missing:
+        tk.Frame(win, bg="#E0E0E0", height=1).pack(fill="x", padx=20)
+        exp = tk.Frame(win, bg="white", padx=20, pady=10)
+        exp.pack(fill="x")
+        tk.Label(exp, text="Select exports:", bg="white",
+                 font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 4))
+        var_add = tk.BooleanVar(value=True)
+        tk.Checkbutton(exp, text="ADD file  (Not Found \u2013 not yet in Zoom)",
+                       variable=var_add, bg="white",
+                       font=(_FONT, 10), fg="#333",
+                       activebackground="white").pack(anchor="w")
+
     bf = _make_btn_frame(win)
 
-    def on_done(): win.destroy()
-    tk.Button(bf, text="Done", bg="#1F2D4E", fg="white",
-              font=(_FONT, 10, "bold"), width=10, relief="flat",
-              cursor="hand2", command=on_done).pack(side="right")
-    win.protocol("WM_DELETE_WINDOW", on_done)
+    def on_done():
+        if has_missing and var_add.get():
+            result["exports"].add("add")
+        win.destroy()
+
+    def on_skip():
+        win.destroy()
+
+    if has_missing:
+        _add_cancel_btn(bf, on_skip, "Skip Export")
+        _add_primary_btn(bf, on_done, "Export Selected ->", width=16)
+    else:
+        tk.Button(bf, text="Done", bg="#1F2D4E", fg="white",
+                  font=(_FONT, 10, "bold"), width=10, relief="flat",
+                  highlightbackground="#1F2D4E",
+                  cursor="hand2", command=on_done).pack(side="right")
+
+    win.protocol("WM_DELETE_WINDOW", on_skip if has_missing else on_done)
     win.lift(); win.focus_force()
     root.wait_window(win)
+    return result["exports"]
 
 
 # ── Intro dialog ──────────────────────────────────────────────
