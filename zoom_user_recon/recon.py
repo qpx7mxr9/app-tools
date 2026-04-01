@@ -141,6 +141,7 @@ def _apply_colors(ws, df, status_col_idx):
 def _stamp_dashboard(wb):
     """Write last-run timestamp next to DASH_LABEL on CA Tools or Dashboard sheet."""
     now_str = datetime.now().strftime("%m/%d/%Y %I:%M %p")
+    target = DASH_LABEL.strip().lower()
     for sheet_name in ("CA Tools", "Dashboard"):
         try:
             dash = wb.sheets[sheet_name]
@@ -148,15 +149,20 @@ def _stamp_dashboard(wb):
             _log(f"stamp_dashboard: sheet '{sheet_name}' not found")
             continue
         data = dash.used_range.value or []
+        # Log every non-empty string cell so we can verify the exact label text
+        found_labels = []
         for r_idx, row in enumerate(data):
             if not row:
                 continue
             for c_idx, cell in enumerate(row):
-                if cell and str(cell).strip() == DASH_LABEL:
+                if cell and isinstance(cell, str) and cell.strip():
+                    found_labels.append(f"r{r_idx+1}c{c_idx+1}='{cell.strip()}'")
+                if cell and str(cell).strip().lower() == target:
                     dash.range((r_idx + 1, c_idx + 3)).value = now_str
                     _log(f"stamp_dashboard: wrote '{now_str}' to {sheet_name} row={r_idx+1} col={c_idx+3}")
                     return
-        _log(f"stamp_dashboard: label '{DASH_LABEL}' not found on '{sheet_name}'")
+        _log(f"stamp_dashboard: '{DASH_LABEL}' not found on '{sheet_name}'. "
+             f"Cells seen: {found_labels[:30]}")
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
