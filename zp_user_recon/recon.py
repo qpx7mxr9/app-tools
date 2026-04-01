@@ -399,7 +399,12 @@ _UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
 _ADD_STATUSES    = {STATUS_INCOMPLETE}
 
 
-def _export(wb, ws, df, headers, mode, phone_source="temp"):
+def _export(wb, ws, df, headers, mode, phone_source="temp", changes_map=None):
+    """
+    changes_map: dict of {normalized_email: changes_note_string} built during
+    the reconciliation loop.  Used to populate the ZP Changes column without
+    relying on the sheet having a ZP Changes column header.
+    """
     import pandas as pd
     from datetime import date
     import csv
@@ -449,13 +454,16 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
         if zu_status in _ZP_EXPORT_SKIP_ZU_STATUSES:
             _log(f"export skip (ZU status='{zu_status}'): {row.get(H_EMAIL, '')}")
             continue
+        em = _norm_email(str(row.get(H_EMAIL, "") or ""))
         out = {}
         for col in export_cols:
-            sheet_col = col_map.get(col, col)   # remap phone cols, rest are direct
-            if sheet_col in headers:
-                out[col] = row.get(sheet_col, "")
+            if col == CHANGES_HDR:
+                # Use in-memory changes_map — doesn't require ZP Changes col on sheet
+                out[col] = (changes_map or {}).get(em, "") if changes_map is not None \
+                           else str(row.get(CHANGES_HDR, "") or "")
             else:
-                out[col] = ""
+                sheet_col = col_map.get(col, col)
+                out[col] = row.get(sheet_col, "") if sheet_col in headers else ""
         rows.append(out)
 
     if not rows:
@@ -610,6 +618,7 @@ def run_zp_reconciliation():
 
     # ── Process each DGW row ──────────────────────────────────────────────────
     cnt = dict(complete=0, progress=0, discrep=0, incomplete=0)
+    changes_map = {}   # normalized_email → changes note string
     total_rows = len(df)
 
     prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...", wb=wb, title="ZP User Recon")
@@ -675,18 +684,23 @@ def run_zp_reconciliation():
             if all_match:
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_COMPLETE
                 changes_note = "Softphone" if softphone else ""
+                changes_map[em] = changes_note
                 _write(ws, excel_row, headers, CHANGES_HDR, changes_note)
                 _write(ws, excel_row, headers, H_ZP_PACKAGE, csv_val(C_PACKAGE))
                 _highlight_mismatches(ws, excel_row, headers, set(), compare_cols)
                 cnt["complete"] += 1
             elif dev_discrep:
+                changes_note = ", ".join(sorted(mismatches))
+                changes_map[em] = changes_note
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_DISCREP
-                _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
+                _write(ws, excel_row, headers, CHANGES_HDR, changes_note)
                 _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                 cnt["discrep"] += 1
             else:
+                changes_note = ", ".join(sorted(mismatches))
+                changes_map[em] = changes_note
                 ws.range((excel_row, d[H_STATUS])).value = STATUS_PROGRESS
-                _write(ws, excel_row, headers, CHANGES_HDR, ", ".join(sorted(mismatches)))
+                _write(ws, excel_row, headers, CHANGES_HDR, changes_note)
                 _highlight_mismatches(ws, excel_row, headers, mismatches, compare_cols)
                 cnt["progress"] += 1
 
@@ -731,7 +745,7 @@ def run_zp_reconciliation():
     _log(f"Exports selected: {exports}")
     if "update" in exports:
         _log("Calling UPDATE export...")
-        _export(wb, ws, df_fresh, headers_f, "update", phone_source)
+        _export(wb, ws, df_fresh, headers_f, "update", phone_source, changes_map)
     if "add" in exports:
         _log("Calling ADD export...")
         _export(wb, ws, df_fresh, headers_f, "add", phone_source)
