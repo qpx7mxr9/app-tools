@@ -122,16 +122,18 @@ def _load_file(path):
 # ── Coloring ──────────────────────────────────────────────────────────────────
 
 def _apply_colors(ws, df, status_col_idx):
-    """Apply background (and attempt font) colors to the status column."""
+    """Apply background and font colors to the status column."""
     for excel_row, row in df.iterrows():
         raw = row.iloc[status_col_idx - 1] if status_col_idx - 1 < len(row) else ""
         val = str(raw).strip().lower()
         cell = ws.range((excel_row, status_col_idx))
         if val in _STATUS_COLORS:
-            bg, _fg = _STATUS_COLORS[val]
+            bg, fg = _STATUS_COLORS[val]
             cell.color = bg
+            cell.font.color = fg
         else:
             cell.color = None
+            cell.font.color = (0, 0, 0)
 
 
 # ── Dashboard stamp ───────────────────────────────────────────────────────────

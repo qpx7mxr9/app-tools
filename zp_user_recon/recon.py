@@ -79,11 +79,12 @@ CHANGES_HDR    = "ZP Changes"
 DASH_LABEL     = "ZP Recon Last Update:"
 MISMATCH_COLOR = (255, 175, 100)   # orange — cell value differs from CSV
 
+# (background RGB, font RGB)
 _STATUS_COLORS = {
-    STATUS_COMPLETE:   (198, 239, 206),   # green
-    STATUS_PROGRESS:   (255, 235, 156),   # yellow
-    STATUS_DISCREP:    (255, 199, 206),   # red/pink
-    STATUS_INCOMPLETE: (252, 228, 214),   # light orange
+    STATUS_COMPLETE:   ((198, 239, 206), (0,   97,  0)),    # green
+    STATUS_PROGRESS:   ((255, 235, 156), (156, 101,  0)),   # yellow
+    STATUS_DISCREP:    ((255, 199, 206), (156,   0,  6)),   # red
+    STATUS_INCOMPLETE: ((252, 228, 214), (156,  56,  0)),   # orange
 }
 
 import tempfile as _tempfile, os as _os
@@ -278,14 +279,20 @@ def _write(ws, excel_row, headers, col_name, value):
 # ── Color helpers ─────────────────────────────────────────────────────────────
 
 def _apply_colors(ws, df, headers):
-    """Color-code the ZP User Status column."""
+    """Color-code the ZP User Status column — background and font."""
     if H_STATUS not in headers:
         return
     col_idx = headers.index(H_STATUS) + 1
     for excel_row, row in df.iterrows():
         val = str(row.get(H_STATUS, "") or "").strip()
         cell = ws.range((excel_row, col_idx))
-        cell.color = _STATUS_COLORS.get(val, None)
+        colors = _STATUS_COLORS.get(val)
+        if colors:
+            cell.color = colors[0]
+            cell.font.color = colors[1]
+        else:
+            cell.color = None
+            cell.font.color = (0, 0, 0)
 
 
 def _highlight_mismatches(ws, excel_row, headers, mismatch_cols, compare_cols):

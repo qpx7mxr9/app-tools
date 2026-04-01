@@ -179,24 +179,29 @@ def _log(msg):
         pass
 
 
+# (background RGB, font RGB)
+_STATUS_COLORS = {
+    "Complete":         ((198, 239, 206), (0,   97,  0)),   # green
+    "In Progress":      ((255, 235, 156), (156, 101,  0)),  # yellow
+    "Discrepancy":      ((255, 199, 206), (156,   0,  6)),  # red
+    "Not Found in CSV": ((252, 228, 214), (156,  56,  0)),  # orange
+}
+
 def _color_status(ws, df):
-    """Color-code the Common Area Status column."""
+    """Color-code the Common Area Status column — background and font."""
     if STATUS_HDR not in df.columns:
         return
     col_idx = list(df.columns).index(STATUS_HDR) + 1
     for row, val in zip(df.index, df[STATUS_HDR]):
         cell = ws.range((row, col_idx))
         val = str(val).strip() if val else ""
-        if val == "Complete":
-            cell.color = (198, 239, 206)   # green
-        elif val == "In Progress":
-            cell.color = (255, 235, 156)   # yellow
-        elif val == "Discrepancy":
-            cell.color = (255, 199, 206)   # red
-        elif val == "Not Found in CSV":
-            cell.color = (252, 228, 214)   # orange
+        colors = _STATUS_COLORS.get(val)
+        if colors:
+            cell.color = colors[0]
+            cell.font.color = colors[1]
         else:
             cell.color = None
+            cell.font.color = (0, 0, 0)
 
 
 def _stamp_dashboard(wb):
