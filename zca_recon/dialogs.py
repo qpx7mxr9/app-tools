@@ -455,11 +455,16 @@ def show_zu_intro():
 
 def show_zu_results(counts, has_pending=False):
     """
-    ZU results dialog. Returns set of {"add"} for exports selected.
+    ZU results dialog. Returns set of {"update", "add"} for exports selected.
     counts = {"active", "inactive", "domain", "pending", "missing"}
+
+    UPDATE checkbox shown when inactive > 0  (Inactive – In Account → reactivate)
+    ADD    checkbox shown when domain   > 0  (Not In Account → add to Zoom)
     """
     result = {"exports": set()}
-    has_missing = counts.get("missing", 0) > 0
+    has_inactive       = counts.get("inactive", 0) > 0
+    has_not_in_account = counts.get("domain",   0) > 0
+    has_exports        = has_inactive or has_not_in_account
 
     root = _get_root(); _focus_python()
     win = tk.Toplevel(root)
@@ -468,11 +473,14 @@ def show_zu_results(counts, has_pending=False):
     try: win.attributes("-topmost", True)
     except Exception: pass
 
-    # Taller if pending row shown and/or export section shown
+    # Height: base + pending row + export section
     h = 300
     if has_pending: h += 28
-    if has_missing: h += 70
-    _center(win, 400, h)
+    if has_exports:
+        h += 50                          # divider + "Select exports:" label
+        if has_inactive:       h += 28   # UPDATE checkbox
+        if has_not_in_account: h += 28   # ADD checkbox
+    _center(win, 420, h)
 
     _make_header(win, "ZOOM USER AUDIT COMPLETE")
 
@@ -485,30 +493,47 @@ def show_zu_results(counts, has_pending=False):
         _stat_row(stats, "Pending Activation",     counts.get("pending",  0), "#1F497D", "#DCE6F1", 24)
     _stat_row(stats, "Not Found",                  counts.get("missing",  0), "#666666", "#F2F2F2", 24)
 
-    if has_missing:
+    var_upd = None
+    var_add = None
+
+    if has_exports:
         tk.Frame(win, bg="#E0E0E0", height=1).pack(fill="x", padx=20)
         exp = tk.Frame(win, bg="white", padx=20, pady=10)
         exp.pack(fill="x")
         tk.Label(exp, text="Select exports:", bg="white",
                  font=(_FONT, 10, "bold"), fg="#333").pack(anchor="w", pady=(0, 4))
-        var_add = tk.BooleanVar(value=True)
-        tk.Checkbutton(exp, text="ADD file  (Not Found \u2013 not yet in Zoom)",
-                       variable=var_add, bg="white",
-                       font=(_FONT, 10), fg="#333",
-                       activebackground="white").pack(anchor="w")
+
+        if has_inactive:
+            var_upd = tk.BooleanVar(value=True)
+            tk.Checkbutton(exp,
+                           text="UPDATE file  (Inactive \u2013 In Account)",
+                           variable=var_upd, bg="white",
+                           font=(_FONT, 10), fg="#333",
+                           activebackground="white").pack(anchor="w")
+
+        if has_not_in_account:
+            var_add = tk.BooleanVar(value=True)
+            tk.Checkbutton(exp,
+                           text="ADD file  (Not In Account \u2013 add to Zoom)",
+                           variable=var_add, bg="white",
+                           font=(_FONT, 10), fg="#333",
+                           activebackground="white").pack(anchor="w",
+                           pady=(4 if has_inactive else 0, 0))
 
     bf = _make_btn_frame(win)
 
     def on_done():
-        if has_missing and var_add.get():
+        if var_upd is not None and var_upd.get():
+            result["exports"].add("update")
+        if var_add is not None and var_add.get():
             result["exports"].add("add")
         win.destroy()
 
     def on_skip():
         win.destroy()
 
-    if has_missing:
-        _add_cancel_btn(bf, on_skip, "Skip Export")
+    if has_exports:
+        _add_cancel_btn(bf, on_skip, "Skip Exports")
         _add_primary_btn(bf, on_done, "Export Selected ->", width=16)
     else:
         tk.Button(bf, text="Done", bg="#1F2D4E", fg="white",
@@ -516,7 +541,7 @@ def show_zu_results(counts, has_pending=False):
                   highlightbackground="#1F2D4E",
                   cursor="hand2", command=on_done).pack(side="right")
 
-    win.protocol("WM_DELETE_WINDOW", on_skip if has_missing else on_done)
+    win.protocol("WM_DELETE_WINDOW", on_skip if has_exports else on_done)
     win.lift(); win.focus_force()
     root.wait_window(win)
     return result["exports"]

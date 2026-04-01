@@ -169,13 +169,74 @@ def _log(msg):
         pass
 
 
-# ── ADD export ───────────────────────────────────────────────────────────────
+# ── Exports ───────────────────────────────────────────────────────────────────
 
-# Columns match the Zoom add-users CSV template exactly
+# Statuses included in each export
+_ZU_UPDATE_STATUSES = {"Inactive - In Account"}   # deactivated → reactivate/update
+_ZU_ADD_STATUSES    = {"Not In Account"}           # in domain but not in Zoom account → add
+
+# Columns match Zoom CSV templates exactly
+_ZU_UPDATE_COLS = [
+    "Email", "First Name", "Last Name", "Phone Number",
+    "Department", "Manager", "User Groups", "Licenses",
+    "Large Meeting", "Zoom Webinars", "Job Title", "Location", "Cost Center",
+]
+
 _ZU_ADD_COLS = [
     "Email", "First Name", "Last Name", "Department",
     "Manager", "User Groups", "Job Title", "Location", "Cost Center",
 ]
+
+# Licenses on the UPDATE export come from the Zoom License Status column
+# written by the audit — everything else maps directly by column name
+_ZU_UPDATE_COL_MAP = {
+    "Licenses": COL_LICENSE,
+}
+
+
+def _export_update(wb, ws, df, headers):
+    """Export Inactive / Not In Account users to the Zoom update-users template."""
+    import csv
+    from datetime import date
+
+    if COL_STATUS not in headers:
+        dlg.info("Export Error", f"'{COL_STATUS}' column not found.")
+        return
+
+    rows = []
+    for _, row in df.iterrows():
+        status = str(row.get(COL_STATUS, "") or "").strip()
+        if status not in _ZU_UPDATE_STATUSES:
+            continue
+        out = {}
+        for col in _ZU_UPDATE_COLS:
+            src = _ZU_UPDATE_COL_MAP.get(col, col)
+            out[col] = str(row.get(src, "") or "").strip()
+        rows.append(out)
+
+    _log(f"ZU UPDATE export: {len(rows)} rows")
+
+    if not rows:
+        dlg.info("Export", "No Inactive users to export.")
+        return
+
+    suggested = f"ZU_Update_{date.today().strftime('%Y%m%d')}.csv"
+    save_path = dlg.get_save_path(suggested, "Save ZU Update CSV")
+    if not save_path:
+        return
+
+    try:
+        with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=_ZU_UPDATE_COLS)
+            writer.writeheader()
+            writer.writerows(rows)
+        dlg.info("Export Complete",
+                 f"UPDATE export saved:\n{save_path}\n\n{len(rows)} users.")
+        _log(f"ZU UPDATE export saved: {save_path}")
+    except Exception as e:
+        dlg.info("Export Error", str(e))
+        _log(f"ZU UPDATE export error: {e}")
+
 
 def _export_add(wb, ws, df, headers):
     """Export users with Zoom User Status = 'Not Found' to the Zoom add-users template."""
@@ -189,7 +250,7 @@ def _export_add(wb, ws, df, headers):
     rows = []
     for _, row in df.iterrows():
         status = str(row.get(COL_STATUS, "") or "").strip()
-        if status != "Not Found":
+        if status not in _ZU_ADD_STATUSES:
             continue
         out = {}
         for col in _ZU_ADD_COLS:
@@ -197,10 +258,10 @@ def _export_add(wb, ws, df, headers):
             out[col] = str(row.get(col, "") or "").strip()
         rows.append(out)
 
-    _log(f"ZU ADD export: {len(rows)} Not Found rows")
+    _log(f"ZU ADD export: {len(rows)} Not In Account rows")
 
     if not rows:
-        dlg.info("Export", "No 'Not Found' users to export.")
+        dlg.info("Export", "No 'Not In Account' users to export.")
         return
 
     suggested = f"ZU_Add_{date.today().strftime('%Y%m%d')}.csv"
@@ -427,6 +488,8 @@ def run_zoom_user_audit():
     df_fresh  = _read_df(ws)
     headers_f = list(df_fresh.columns)
     exports = dlg.show_zu_results(cnt, has_pending=df_pending is not None)
+    if "update" in exports:
+        _export_update(wb, ws, df_fresh, headers_f)
     if "add" in exports:
         _export_add(wb, ws, df_fresh, headers_f)
 
