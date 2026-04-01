@@ -180,7 +180,7 @@ class ProgressWindow:
 
     Pass wb=<xlwings Book> to enable the Mac status-bar path.
     """
-    def __init__(self, message="Working...", wb=None):
+    def __init__(self, message="Working...", wb=None, title="CA Reconciliation"):
         self._mac = _platform.system() == "Darwin"
         self._xl_app = None
         self._win = None
@@ -199,7 +199,7 @@ class ProgressWindow:
         # Windows: Tkinter progress window
         root = _get_root()
         win = tk.Toplevel(root)
-        win.title("CA Reconciliation")
+        win.title(title)
         win.resizable(False, False)
         try:
             win.attributes("-topmost", True)

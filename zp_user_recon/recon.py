@@ -565,7 +565,7 @@ def run_zp_reconciliation():
     cnt = dict(complete=0, progress=0, discrep=0, incomplete=0)
     total_rows = len(df)
 
-    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...", wb=wb)
+    prog = dlg.ProgressWindow(f"Reconciling 0 of {total_rows} rows...", wb=wb, title="ZP User Recon")
 
     try:
         for i, (excel_row, row) in enumerate(df.iterrows()):
