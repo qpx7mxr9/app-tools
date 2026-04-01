@@ -68,6 +68,7 @@ STATUS_INCOMPLETE = "Setup Incomplete"
 H_ZP_PACKAGE  = "ZP User Package"   # written on Setup Complete with CSV package value
 H_CUSTOMER_DATA_STATUS = "Customer Data Status"   # Initial, Removed, Addition, Change
 H_TCS_DATA_STATUS      = "TCS Data Status"         # Approved, Removed — if Removed, skip exports
+H_ZP_LAST_UPDATE       = "ZP User (Last Update)"  # timestamp written after every recon run
 
 BRAND_WORKPLACE_APP = "workplace app"
 
@@ -683,6 +684,17 @@ def run_zp_reconciliation():
     prog.update("Applying status colors...")
     _apply_colors(ws, _read_df(ws), headers)
     _stamp_dashboard(wb)
+
+    # Write run timestamp to every processed row in the Last Update column
+    now_str = datetime.now().strftime("%m/%d/%Y %I:%M %p")
+    lu_col = _find_col(headers, H_ZP_LAST_UPDATE)
+    if lu_col:
+        last_row = max(df.index)
+        ws.range((2, lu_col), (last_row, lu_col)).value = now_str
+        _log(f"Wrote last-update timestamp to col '{H_ZP_LAST_UPDATE}' rows 2-{last_row}")
+    else:
+        _log(f"Column '{H_ZP_LAST_UPDATE}' not found in headers — skipping timestamp")
+
     prog.close()
 
     # ── Re-read sheet so exports see the freshly written statuses ────────────

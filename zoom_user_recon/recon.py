@@ -31,7 +31,8 @@ COL_EMAIL    = "Email"
 COL_STATUS   = "Zoom User Status"
 COL_LICENSE  = "Zoom License Status"
 COL_EXTERNAL = "Zoom User External Info"
-DASH_LABEL   = "Zoom User Last Update:"
+DASH_LABEL       = "Zoom User Last Update:"
+H_ZU_LAST_UPDATE = "Zoom User (Last Update)"  # timestamp written after every audit run
 
 import tempfile as _tempfile, os as _os
 LOG_PATH = _os.path.join(_tempfile.gettempdir(), "zoom_user_recon.log")
@@ -488,6 +489,17 @@ def run_zoom_user_audit():
 
     # Stamp dashboard
     _stamp_dashboard(wb)
+
+    # Write run timestamp to every processed row in the Last Update column
+    now_str = datetime.now().strftime("%m/%d/%Y %I:%M %p")
+    lu_col = _find_col(headers, H_ZU_LAST_UPDATE)
+    if lu_col:
+        last_row = max(df.index)
+        ws.range((2, lu_col), (last_row, lu_col)).value = now_str
+        _log(f"Wrote last-update timestamp to col '{H_ZU_LAST_UPDATE}' rows 2-{last_row}")
+    else:
+        _log(f"Column '{H_ZU_LAST_UPDATE}' not found in headers — skipping timestamp")
+
     prog.close()
 
     # ── Results dialog + optional ADD export ─────────────────────────────────
