@@ -362,19 +362,38 @@ def _stamp_dashboard(wb):
 
 # ── Export helpers ───────────────────────────────────────────────────────────
 
-# Zoom template column order (matches zoomus_user_template exactly)
-_ZOOM_TEMPLATE_COLS = [
-    "Email", "First Name", "Last Name", "Package",
-    "Site Code", "Site Name", "User Template",
-    "Extension Number", "Phone Number", "Outbound Caller ID",
-    "Select Outbound Caller ID", "SMS", "User Status",
-    "Desk Phone 1's Brand", "Desk Phone 1's Model",
-    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",
-    "Desk Phone 2's Brand", "Desk Phone 2's Model",
-    "Desk Phone 2's MAC Address", "Desk Phone 2's Provision Template",
-    "Desk Phone 3's Brand", "Desk Phone 3's Model",
-    "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",
+# Zoom template column order for ADD export
+_ZOOM_ADD_COLS = [
+    "Email", "First Name", "Last Name", "Package",          # A–D
+    "Site Code", "Site Name", "User Template",              # E–G
+    "Extension Number", "Phone Number", "Outbound Caller ID",  # H–J
+    "Select Outbound Caller ID", "SMS", "User Status",      # K–M
+    "Desk Phone 1's Brand", "Desk Phone 1's Model",         # N–O
+    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",  # P–Q
+    "Desk Phone 2's Brand", "Desk Phone 2's Model",         # R–S
+    "Desk Phone 2's MAC Address", "Desk Phone 2's Provision Template",  # T–U
+    "Desk Phone 3's Brand", "Desk Phone 3's Model",         # V–W
+    "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",  # X–Y
 ]
+
+# UPDATE export has "Activation Status" inserted at column N (after User Status at M),
+# shifting all Desk Phone columns one position to the right.
+_ZOOM_UPDATE_COLS = [
+    "Email", "First Name", "Last Name", "Package",          # A–D
+    "Site Code", "Site Name", "User Template",              # E–G
+    "Extension Number", "Phone Number", "Outbound Caller ID",  # H–J
+    "Select Outbound Caller ID", "SMS", "User Status",      # K–M
+    "Activation Status",                                    # N  ← UPDATE only
+    "Desk Phone 1's Brand", "Desk Phone 1's Model",         # O–P
+    "Desk Phone 1's MAC Address", "Desk Phone 1's Provision Template",  # Q–R
+    "Desk Phone 2's Brand", "Desk Phone 2's Model",         # S–T
+    "Desk Phone 2's MAC Address", "Desk Phone 2's Provision Template",  # U–V
+    "Desk Phone 3's Brand", "Desk Phone 3's Model",         # W–X
+    "Desk Phone 3's MAC Address", "Desk Phone 3's Provision Template",  # Y–Z
+]
+
+# Keep alias for any code that still references the old name
+_ZOOM_TEMPLATE_COLS = _ZOOM_ADD_COLS
 
 _UPDATE_STATUSES = {STATUS_PROGRESS, STATUS_DISCREP}
 _ADD_STATUSES    = {STATUS_INCOMPLETE}
@@ -390,16 +409,15 @@ def _export(wb, ws, df, headers, mode, phone_source="temp"):
     outbound_sh_col = H_OUTBOUND_TEMP if use_temp else H_OUTBOUND
 
     if mode == "update":
-        statuses  = _UPDATE_STATUSES
-        suggested = f"ZPU_Update_{date.today().strftime('%Y%m%d')}.csv"
-        title     = "Save ZP Update CSV"
-        # Add Changes column at end for update exports
-        export_cols = _ZOOM_TEMPLATE_COLS + [CHANGES_HDR]
+        statuses    = _UPDATE_STATUSES
+        suggested   = f"ZPU_Update_{date.today().strftime('%Y%m%d')}.csv"
+        title       = "Save ZP Update CSV"
+        export_cols = _ZOOM_UPDATE_COLS + [CHANGES_HDR]
     else:
-        statuses  = _ADD_STATUSES
-        suggested = f"ZPU_Add_{date.today().strftime('%Y%m%d')}.csv"
-        title     = "Save ZP Add CSV"
-        export_cols = _ZOOM_TEMPLATE_COLS
+        statuses    = _ADD_STATUSES
+        suggested   = f"ZPU_Add_{date.today().strftime('%Y%m%d')}.csv"
+        title       = "Save ZP Add CSV"
+        export_cols = _ZOOM_ADD_COLS
 
     if H_STATUS not in headers:
         dlg.info("Export Error", f"'{H_STATUS}' column not found.")
